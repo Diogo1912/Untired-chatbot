@@ -1,0 +1,2417 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Untire Coach - AI Support for Cancer Fatigue</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-container">
+            <div class="login-header">
+                <h1>Untire Coach</h1>
+                <p>AI support for cancer fatigue</p>
+            </div>
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label for="loginUsername">Username</label>
+                    <input type="text" id="loginUsername" placeholder="Enter your username" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" placeholder="Enter your password" required autocomplete="current-password">
+                </div>
+                <div id="loginError" class="error-message" style="display: none;"></div>
+                <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+            </form>
+        </div>
+    </div>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: #F5F0E6;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .app {
+            display: flex;
+            height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: #FFFFFF;
+            border-right: 1px solid #E7DED3;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #E7DED3;
+            background: #FF7A2F;
+            color: white;
+        }
+        
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+        
+        .tagline {
+            font-size: 0.875rem;
+            opacity: 0.9;
+        }
+        
+        .new-chat-btn {
+            margin: 1rem;
+            padding: 0.75rem 1rem;
+            background: #FF7A2F;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        
+        .new-chat-btn:hover {
+            background: #FF9A5B;
+        }
+        
+        .chat-history {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+        
+        .chat-history h3 {
+            color: #5C5C5C;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .chat-item {
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        
+        .chat-item:hover {
+            background: #FFE8D9;
+            border-color: #FF7A2F;
+        }
+        
+        .chat-item.active {
+            background: #FFE8D9;
+            border-color: #FF7A2F;
+        }
+        
+        .chat-item-title {
+            font-weight: 500;
+            color: #2C2C2C;
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .chat-item-preview {
+            color: #5C5C5C;
+            font-size: 0.75rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .sidebar-footer {
+            padding: 1rem;
+            border-top: 1px solid #E7DED3;
+            background: #FAFAFA;
+        }
+        
+        .disclaimer {
+            background: #FFE8D9;
+            color: #2C2C2C;
+            padding: 0.5rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .status {
+            text-align: center;
+            font-size: 0.75rem;
+            color: #5C5C5C;
+        }
+        
+        .status.connected {
+            color: #2E7D32;
+        }
+        
+        .status.error {
+            color: #D32F2F;
+        }
+        
+        /* Main Chat Area */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #F5F0E6;
+        }
+        
+        .chat-header {
+            background: #FFFFFF;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #E7DED3;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .chat-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #2C2C2C;
+        }
+        
+        .chat-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .action-btn {
+            padding: 0.5rem 1rem;
+            background: white;
+            border: 1px solid #E7DED3;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            color: #5C5C5C;
+            transition: all 0.2s;
+        }
+        
+        .action-btn:hover {
+            background: #FFE8D9;
+            border-color: #FF7A2F;
+            color: #2C2C2C;
+        }
+        
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .messages {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            /* Custom scrollbar */
+            scrollbar-width: thin;
+            scrollbar-color: #FF7A2F #E7DED3;
+        }
+        
+        .messages::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .messages::-webkit-scrollbar-track {
+            background: #E7DED3;
+            border-radius: 3px;
+        }
+        
+        .messages::-webkit-scrollbar-thumb {
+            background: #FF7A2F;
+            border-radius: 3px;
+        }
+        
+        .message {
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            animation: messageFadeIn 0.3s ease-out;
+        }
+        
+        @keyframes messageFadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+        
+        .message.user {
+            flex-direction: row-reverse;
+        }
+        
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+        
+        .avatar.user {
+            background: #FF7A2F;
+            color: white;
+        }
+        
+        .avatar.ai {
+            background: white;
+            border: 2px solid #FFE8D9;
+            color: #FF7A2F;
+        }
+        
+        .message-content {
+            max-width: 70%;
+            padding: 1rem 1.25rem;
+            border-radius: 18px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+        
+        .message.user .message-content {
+            background: #FF7A2F;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message.ai .message-content {
+            background: white;
+            color: #2C2C2C;
+            border: 1px solid #E7DED3;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .message-time {
+            font-size: 0.75rem;
+            color: #808080;
+            margin-top: 0.25rem;
+            text-align: center;
+        }
+        
+        .typing {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #5C5C5C;
+            font-style: italic;
+        }
+        
+        .typing-dots {
+            display: flex;
+            gap: 0.25rem;
+        }
+        
+        .typing-dot {
+            width: 4px;
+            height: 4px;
+            background: #FF7A2F;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+        
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        
+        @keyframes typing {
+            0%, 60%, 100% { opacity: 0.3; }
+            30% { opacity: 1; }
+        }
+        
+        /* Fixed Input Area */
+        .input-container {
+            background: #FFFFFF;
+            border-top: 1px solid #E7DED3;
+            padding: 1.25rem 1.5rem;
+        }
+        
+        .input-area {
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-end;
+            max-width: 1000px;
+        }
+        
+        .input-area textarea {
+            flex: 1;
+            padding: 0.875rem 1.125rem;
+            border: 2px solid #E7DED3;
+            border-radius: 22px;
+            font-size: 0.95rem;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+            resize: none;
+            min-height: 44px;
+            max-height: 120px;
+            background: white;
+        }
+        
+        .input-area textarea:focus {
+            border-color: #FF7A2F;
+        }
+        
+        .input-area textarea::placeholder {
+            color: #999;
+        }
+        
+        .send-btn {
+            padding: 0.875rem 1.5rem;
+            background: #FF7A2F;
+            color: white;
+            border: none;
+            border-radius: 22px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 600;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+        
+        .send-btn:hover:not(:disabled) {
+            background: #FF9A5B;
+        }
+        
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* Welcome State */
+        .welcome {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            padding: 2rem;
+            color: #5C5C5C;
+        }
+        
+        .welcome h2 {
+            color: #FF7A2F;
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+        
+        .welcome p {
+            font-size: 1.1rem;
+            margin-bottom: 1.5rem;
+            max-width: 500px;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .app {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                height: auto;
+                order: 2;
+                border-right: none;
+                border-top: 1px solid #E7DED3;
+            }
+            
+            .main-content {
+                order: 1;
+                height: calc(100vh - 120px);
+            }
+            
+            .chat-history {
+                display: none;
+            }
+            
+            .sidebar-header {
+                padding: 1rem;
+            }
+            
+            .message-content {
+                max-width: 85%;
+            }
+        }
+        
+        /* Loading Animation */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            color: #5C5C5C;
+            font-style: italic;
+        }
+        
+        .loading-dots {
+            display: flex;
+            gap: 0.25rem;
+        }
+        
+        .loading-dot {
+            width: 6px;
+            height: 6px;
+            background: #FF7A2F;
+            border-radius: 50%;
+            animation: loading 1.4s infinite;
+        }
+        
+        .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+        .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+        
+        @keyframes loading {
+            0%, 60%, 100% { opacity: 0.3; }
+            30% { opacity: 1; }
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            border: 1px solid #E7DED3;
+        }
+
+        .modal h3 {
+            color: #FF7A2F;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+
+        .modal p {
+            color: #5C5C5C;
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #2C2C2C;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #E7DED3;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #FF7A2F;
+        }
+
+        .fatigue-input-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .fatigue-input-group input {
+            flex: 0 0 100px;
+        }
+
+        .fatigue-slider {
+            flex: 1;
+            height: 8px;
+            border-radius: 4px;
+            background: #E7DED3;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .fatigue-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #FF7A2F;
+            cursor: pointer;
+        }
+
+        .fatigue-slider::-moz-range-thumb {
+            appearance: none;
+            -moz-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #FF7A2F;
+            cursor: pointer;
+            border: none;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+            margin-top: 2rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #FF7A2F;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #FF9A5B;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #5C5C5C;
+            border: 2px solid #E7DED3;
+        }
+
+        .btn-secondary:hover {
+            background: #FFE8D9;
+            border-color: #FF7A2F;
+        }
+
+        .profile-info {
+            padding: 0.75rem 1rem;
+            background: #FFE8D9;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            color: #2C2C2C;
+        }
+
+        .profile-info strong {
+            color: #FF7A2F;
+        }
+
+        .profile-info {
+            cursor: pointer;
+        }
+
+        .profile-info:hover {
+            background: #FFD4B8;
+        }
+
+        .clear-info-btn {
+            width: 100%;
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+            background: transparent;
+            border: 1px solid #E7DED3;
+            border-radius: 6px;
+            color: #5C5C5C;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .clear-info-btn:hover {
+            background: #FFE8D9;
+            border-color: #FF7A2F;
+            color: #D32F2F;
+        }
+
+        /* Video Widget Styles */
+        .video-widget {
+            margin-top: 1rem;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #E7DED3;
+        }
+
+        .video-title {
+            padding: 0.5rem 0.75rem;
+            background: #FFE8D9;
+            color: #2C2C2C;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .video-widget iframe {
+            width: 100%;
+            height: 315px;
+            display: block;
+        }
+
+        /* Breathing Exercise Widget Styles */
+        .breathing-widget {
+            margin-top: 1rem;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #E7DED3;
+            background: #FAFAFA;
+        }
+
+        .breathing-title {
+            padding: 0.75rem 1rem;
+            background: #FFE8D9;
+            color: #2C2C2C;
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .breathing-content {
+            padding: 1rem;
+        }
+
+        .breathing-pattern {
+            text-align: center;
+            margin: 1rem 0;
+            font-size: 1.1rem;
+            color: #FF7A2F;
+            font-weight: 600;
+        }
+
+        .breathing-timer {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+            color: #FF7A2F;
+            margin: 1rem 0;
+        }
+
+        .breathing-controls {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-top: 1rem;
+        }
+
+        .breathing-btn {
+            padding: 0.5rem 1rem;
+            background: #FF7A2F;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .breathing-btn:hover {
+            background: #FF9A5B;
+        }
+
+        .breathing-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Fatigue Quiz Styles */
+        .quiz-container {
+            padding: 1rem;
+        }
+
+        .quiz-question {
+            margin-bottom: 1.5rem;
+        }
+
+        .quiz-question-text {
+            font-weight: 500;
+            color: #2C2C2C;
+            margin-bottom: 0.75rem;
+            font-size: 1rem;
+        }
+
+        .quiz-options {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .quiz-option {
+            padding: 0.75rem;
+            border: 2px solid #E7DED3;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: white;
+        }
+
+        .quiz-option:hover {
+            border-color: #FF7A2F;
+            background: #FFE8D9;
+        }
+
+        .quiz-option.selected {
+            border-color: #FF7A2F;
+            background: #FFE8D9;
+            font-weight: 500;
+        }
+
+        .quiz-progress {
+            margin-bottom: 1rem;
+            font-size: 0.85rem;
+            color: #5C5C5C;
+        }
+
+        .quiz-result {
+            text-align: center;
+            padding: 1.5rem;
+            background: #FFE8D9;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .quiz-result-level {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #FF7A2F;
+            margin: 0.5rem 0;
+        }
+
+        .quiz-result-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            margin-top: 1rem;
+        }
+
+        /* Settings Modal */
+        .settings-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .settings-section h4 {
+            color: #2C2C2C;
+            margin-bottom: 0.75rem;
+            font-size: 1rem;
+        }
+
+        .settings-option {
+            margin-bottom: 1rem;
+        }
+
+        .settings-option label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+
+        .settings-option input[type="radio"],
+        .settings-option input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+        }
+
+        .settings-description {
+            font-size: 0.85rem;
+            color: #5C5C5C;
+            margin-top: 0.25rem;
+            margin-left: 1.75rem;
+        }
+
+        /* Login Screen Styles */
+        .login-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #FAFAFA;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .login-container {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .login-header h1 {
+            color: #FF7A2F;
+            margin: 0 0 0.5rem 0;
+            font-size: 2rem;
+        }
+
+        .login-header p {
+            color: #5C5C5C;
+            margin: 0;
+            font-size: 0.95rem;
+        }
+
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .btn-block {
+            width: 100%;
+            padding: 0.875rem;
+            font-size: 1rem;
+        }
+
+        .error-message {
+            background: #FFE8D9;
+            color: #D32F2F;
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            border: 1px solid #FFB3A7;
+        }
+
+        .app {
+            display: none;
+        }
+
+        .app.authenticated {
+            display: flex;
+        }
+
+        /* Profile View Styles */
+        .profile-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .profile-section h4 {
+            color: #FF7A2F;
+            margin-bottom: 0.75rem;
+            font-size: 1rem;
+            border-bottom: 1px solid #E7DED3;
+            padding-bottom: 0.5rem;
+        }
+
+        .profile-details {
+            background: #FAFAFA;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid #E7DED3;
+            line-height: 1.6;
+            color: #2C2C2C;
+            white-space: pre-wrap;
+        }
+
+        .profile-details.empty {
+            color: #5C5C5C;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">Untire Coach</div>
+                <div class="tagline">AI support for cancer fatigue</div>
+            </div>
+            
+            <button class="new-chat-btn" onclick="startNewChat()">
+                New Chat
+            </button>
+            
+            <div class="chat-history">
+                <h3>Recent Chats</h3>
+                <div id="chatHistory">
+                    <!-- Chat history items will be populated here -->
+                </div>
+            </div>
+            
+            <div class="sidebar-footer">
+                <div id="profileInfo" class="profile-info" style="display: none;" onclick="showProfileView()"></div>
+                <button id="clearInfoBtn" class="clear-info-btn" style="display: none;" onclick="clearAllInfo()">
+                    Clear All Info
+                </button>
+                <div class="disclaimer">Not medical advice</div>
+                <div class="status" id="connectionStatus">Connecting...</div>
+            </div>
+        </div>
+        
+        <!-- Main Chat Area -->
+        <div class="main-content">
+            <div class="chat-header">
+                <div class="chat-title" id="chatTitle">New Conversation</div>
+                <div class="chat-actions">
+                    <button class="action-btn" onclick="startFatigueQuiz()">Fatigue Quiz</button>
+                    <button class="action-btn" onclick="openSettings()">Settings</button>
+                    <button class="action-btn" onclick="exportChat()">Export</button>
+                    <button class="action-btn" onclick="clearCurrentChat()">Clear</button>
+                    <button class="action-btn" onclick="handleLogout()">Logout</button>
+                </div>
+            </div>
+            
+            <div class="chat-container">
+                <div class="messages" id="messages">
+                    <div class="welcome" id="welcomeScreen">
+                        <h2>Welcome to Untire Coach</h2>
+                        <p>I'm here to support you through cancer-related fatigue with gentle, practical strategies. Share what's on your mind and I'll listen.</p>
+                        <div class="loading" id="connectionLoader">
+                            <span>Connecting to your AI coach</span>
+                            <div class="loading-dots">
+                                <div class="loading-dot"></div>
+                                <div class="loading-dot"></div>
+                                <div class="loading-dot"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="input-container">
+                    <div class="input-area">
+                        <textarea 
+                            id="messageInput" 
+                            placeholder="Share what's on your mind... I'm here to help with fatigue, energy, sleep, or just to listen."
+                            disabled
+                        ></textarea>
+                        <button class="send-btn" id="sendBtn" disabled>Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Creation Modal -->
+    <div id="profileModal" class="modal-overlay" style="display: none;">
+        <div class="modal">
+            <h3>Welcome to Untire Coach</h3>
+            <p>Let's get to know you a bit better so I can provide personalized support. You can update this information anytime.</p>
+            <form id="profileForm">
+                <div class="form-group">
+                    <label for="profileName">Name (optional)</label>
+                    <input type="text" id="profileName" placeholder="Enter your name">
+                </div>
+                <div class="form-group">
+                    <label for="profileAge">Age (optional)</label>
+                    <input type="number" id="profileAge" placeholder="Enter your age" min="1" max="120">
+                </div>
+                <div class="form-group">
+                    <label for="profileFatigue">Typical Fatigue Level (1-10)</label>
+                    <div class="fatigue-input-group">
+                        <input type="number" id="profileFatigue" step="0.1" min="1" max="10" value="5" placeholder="5.0">
+                        <input type="range" id="profileFatigueSlider" class="fatigue-slider" min="1" max="10" step="0.1" value="5">
+                    </div>
+                    <small style="color: #5C5C5C; font-size: 0.85rem;">Slide or type a value between 1.0 (very low) and 10.0 (very high)</small>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="skipProfile()">Skip for now</button>
+                    <button type="submit" class="btn btn-primary">Save Profile</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Fatigue Rating Modal -->
+    <div id="fatigueModal" class="modal-overlay" style="display: none;">
+        <div class="modal">
+            <h3>How are you feeling today?</h3>
+            <p>Before we start our conversation, could you please rate your current level of fatigue on a scale from 1 to 10 (with one decimal point)?</p>
+            <p style="font-size: 0.9rem; color: #5C5C5C;">
+                <strong>1.0</strong> = Very low fatigue, feeling energetic<br>
+                <strong>5.0</strong> = Moderate fatigue<br>
+                <strong>10.0</strong> = Extreme fatigue, very difficult to function
+            </p>
+            <form id="fatigueForm">
+                <div class="form-group">
+                    <label for="currentFatigue">Current Fatigue Level</label>
+                    <div class="fatigue-input-group">
+                        <input type="number" id="currentFatigue" step="0.1" min="1" max="10" value="5" placeholder="5.0" required>
+                        <input type="range" id="currentFatigueSlider" class="fatigue-slider" min="1" max="10" step="0.1" value="5">
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Continue</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Profile View Modal -->
+    <div id="profileViewModal" class="modal-overlay" style="display: none;">
+        <div class="modal">
+            <h3>Your Profile</h3>
+            <div id="profileViewContent">
+                <div class="profile-section">
+                    <h4>Basic Information</h4>
+                    <div id="basicInfo" class="profile-details"></div>
+                </div>
+                <div class="profile-section">
+                    <h4>What I Know About You</h4>
+                    <div id="dynamicProfileInfo" class="profile-details"></div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-primary" onclick="closeProfileView()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fatigue Quiz Modal -->
+    <div id="fatigueQuizModal" class="modal-overlay" style="display: none;">
+        <div class="modal">
+            <h3>Fatigue Assessment Quiz</h3>
+            <div id="quizContainer" class="quiz-container">
+                <div id="quizProgress" class="quiz-progress"></div>
+                <div id="quizQuestions"></div>
+                <div id="quizResult" style="display: none;"></div>
+            </div>
+            <div class="modal-actions" id="quizActions">
+                <button type="button" class="btn btn-secondary" onclick="closeFatigueQuiz()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="quizNextBtn" onclick="nextQuizQuestion()" style="display: none;">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal-overlay" style="display: none;">
+        <div class="modal">
+            <h3>AI Settings</h3>
+            <form id="settingsForm">
+                <div class="settings-section">
+                    <h4>Behavior Type</h4>
+                    <div class="settings-option">
+                        <label>
+                            <input type="radio" name="behavior_type" value="empathetic" checked>
+                            <span>Empathetic</span>
+                        </label>
+                        <div class="settings-description">Warm, understanding, and deeply validating</div>
+                    </div>
+                    <div class="settings-option">
+                        <label>
+                            <input type="radio" name="behavior_type" value="practical">
+                            <span>Practical</span>
+                        </label>
+                        <div class="settings-description">Direct, action-oriented, with concrete suggestions</div>
+                    </div>
+                    <div class="settings-option">
+                        <label>
+                            <input type="radio" name="behavior_type" value="encouraging">
+                            <span>Encouraging</span>
+                        </label>
+                        <div class="settings-description">Positive, uplifting, and motivational</div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h4>Features</h4>
+                    <div class="settings-option">
+                        <label>
+                            <input type="checkbox" id="agenticFeatures" checked>
+                            <span>Enable Agentic Features</span>
+                        </label>
+                        <div class="settings-description">AI can suggest meditation videos and other helpful resources</div>
+                    </div>
+                    <div class="settings-option">
+                        <label>
+                            <input type="checkbox" id="chatOnly">
+                            <span>Chat Only Mode</span>
+                        </label>
+                        <div class="settings-description">Disable all agentic features, only text conversations</div>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeSettings()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let currentChatId = null;
+        let userId = localStorage.getItem('untire_userId') || generateId();
+        let userProfile = null;
+        let currentFatigueLevel = null;
+        let chats = [];
+        let isConnected = false;
+        
+        // DOM elements
+        const messages = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const chatTitle = document.getElementById('chatTitle');
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        const connectionLoader = document.getElementById('connectionLoader');
+        const chatHistory = document.getElementById('chatHistory');
+        const loginScreen = document.getElementById('loginScreen');
+        const loginForm = document.getElementById('loginForm');
+        const loginError = document.getElementById('loginError');
+        const app = document.querySelector('.app');
+        const profileModal = document.getElementById('profileModal');
+        const fatigueModal = document.getElementById('fatigueModal');
+        const settingsModal = document.getElementById('settingsModal');
+        const fatigueQuizModal = document.getElementById('fatigueQuizModal');
+        const profileViewModal = document.getElementById('profileViewModal');
+        const profileInfo = document.getElementById('profileInfo');
+        const clearInfoBtn = document.getElementById('clearInfoBtn');
+        let userSettings = null;
+        let currentUser = null;
+
+        // Generate unique ID
+        function generateId() {
+            const id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+            localStorage.setItem('untire_userId', id);
+            return id;
+        }
+
+        // Sync fatigue slider and input
+        function syncFatigueInputs(inputId, sliderId) {
+            const input = document.getElementById(inputId);
+            const slider = document.getElementById(sliderId);
+            
+            input.addEventListener('input', () => {
+                const value = Math.min(10, Math.max(1, parseFloat(input.value) || 1));
+                slider.value = value;
+                input.value = value.toFixed(1);
+            });
+            
+            slider.addEventListener('input', () => {
+                input.value = parseFloat(slider.value).toFixed(1);
+            });
+        }
+
+        // Load user profile
+        async function loadProfile() {
+            try {
+                const response = await fetch(`/api/profile/${userId}`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    userProfile = data.profile;
+                    updateProfileDisplay();
+                    
+                    if (!userProfile) {
+                        showProfileModal();
+                    }
+                }
+            } catch (error) {
+                console.error('Profile load error:', error);
+            }
+        }
+
+        // Update profile display
+        function updateProfileDisplay() {
+            if (userProfile && (userProfile.name || userProfile.age || userProfile.current_fatigue_level)) {
+                let info = '';
+                if (userProfile.name) info += `<strong>${userProfile.name}</strong>`;
+                if (userProfile.age) info += (info ? ', ' : '') + `Age: ${userProfile.age}`;
+                if (userProfile.current_fatigue_level !== null) {
+                    info += (info ? ' • ' : '') + `Typical fatigue: ${userProfile.current_fatigue_level}/10`;
+                }
+                info += '<br><small style="opacity:0.7;">Click to view full profile</small>';
+                profileInfo.innerHTML = info;
+                profileInfo.style.display = 'block';
+                clearInfoBtn.style.display = 'block';
+            } else {
+                profileInfo.style.display = 'none';
+                clearInfoBtn.style.display = 'none';
+            }
+        }
+
+        // Show profile view modal
+        async function showProfileView() {
+            try {
+                // Reload profile to get latest dynamic profile
+                const response = await fetch(`/api/profile/${userId}`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    userProfile = data.profile;
+                    
+                    // Update basic info
+                    const basicInfo = document.getElementById('basicInfo');
+                    let basicHtml = '';
+                    if (userProfile?.name) basicHtml += `<strong>Name:</strong> ${userProfile.name}<br>`;
+                    if (userProfile?.age) basicHtml += `<strong>Age:</strong> ${userProfile.age}<br>`;
+                    if (userProfile?.current_fatigue_level !== null) {
+                        basicHtml += `<strong>Typical Fatigue Level:</strong> ${userProfile.current_fatigue_level}/10<br>`;
+                    }
+                    if (!basicHtml) basicHtml = 'No basic information set yet.';
+                    basicInfo.innerHTML = basicHtml;
+                    basicInfo.className = basicHtml === 'No basic information set yet.' ? 'profile-details empty' : 'profile-details';
+                    
+                    // Update dynamic profile
+                    const dynamicInfo = document.getElementById('dynamicProfileInfo');
+                    if (userProfile?.dynamic_profile && userProfile.dynamic_profile.trim()) {
+                        dynamicInfo.innerHTML = userProfile.dynamic_profile.replace(/\n/g, '<br>');
+                        dynamicInfo.className = 'profile-details';
+                    } else {
+                        dynamicInfo.innerHTML = 'I\'m still getting to know you. Keep chatting and I\'ll learn more about you!';
+                        dynamicInfo.className = 'profile-details empty';
+                    }
+                    
+                    profileViewModal.style.display = 'flex';
+                } else {
+                    alert('Failed to load profile');
+                }
+            } catch (error) {
+                console.error('Profile view error:', error);
+                alert('Failed to load profile');
+            }
+        }
+
+        function closeProfileView() {
+            profileViewModal.style.display = 'none';
+        }
+
+        // Fatigue Quiz Functions
+        let quizQuestions = [];
+        let currentQuizQuestion = 0;
+        let quizAnswers = [];
+        let quizResult = null;
+
+        async function startFatigueQuiz() {
+            try {
+                const response = await fetch('/api/fatigue-quiz/questions', {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    quizQuestions = data.questions;
+                    currentQuizQuestion = 0;
+                    quizAnswers = [];
+                    quizResult = null;
+                    
+                    if (quizQuestions.length === 0) {
+                        alert('No quiz questions available. Please contact support.');
+                        return;
+                    }
+                    
+                    fatigueQuizModal.style.display = 'flex';
+                    displayQuizQuestion();
+                } else {
+                    alert('Failed to load quiz questions');
+                }
+            } catch (error) {
+                console.error('Quiz load error:', error);
+                alert('Error loading quiz');
+            }
+        }
+
+        function displayQuizQuestion() {
+            const container = document.getElementById('quizQuestions');
+            const progress = document.getElementById('quizProgress');
+            const nextBtn = document.getElementById('quizNextBtn');
+            const resultDiv = document.getElementById('quizResult');
+            
+            resultDiv.style.display = 'none';
+            
+            if (currentQuizQuestion >= quizQuestions.length) {
+                // Quiz complete - calculate result
+                calculateQuizResult();
+                return;
+            }
+            
+            const question = quizQuestions[currentQuizQuestion];
+            progress.textContent = `Question ${currentQuizQuestion + 1} of ${quizQuestions.length}`;
+            
+            container.innerHTML = `
+                <div class="quiz-question">
+                    <div class="quiz-question-text">${question.question_text}</div>
+                    <div class="quiz-options">
+                        ${question.options.map((option, idx) => `
+                            <div class="quiz-option" onclick="selectQuizOption(${currentQuizQuestion}, ${idx}, ${option.value})">
+                                ${option.text}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            nextBtn.style.display = 'none';
+        }
+
+        function selectQuizOption(questionIndex, optionIndex, value) {
+            // Remove previous selection
+            document.querySelectorAll('.quiz-option').forEach(opt => opt.classList.remove('selected'));
+            
+            // Mark selected
+            event.target.classList.add('selected');
+            
+            // Store answer
+            quizAnswers[questionIndex] = {
+                questionId: quizQuestions[questionIndex].id,
+                selectedOption: optionIndex,
+                optionValue: value
+            };
+            
+            // Show next button
+            document.getElementById('quizNextBtn').style.display = 'block';
+        }
+
+        function nextQuizQuestion() {
+            if (!quizAnswers[currentQuizQuestion]) {
+                alert('Please select an answer');
+                return;
+            }
+            
+            currentQuizQuestion++;
+            displayQuizQuestion();
+        }
+
+        async function calculateQuizResult() {
+            try {
+                const response = await fetch('/api/fatigue-quiz/calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ answers: quizAnswers })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    quizResult = data.suggestedFatigueLevel;
+                    showQuizResult();
+                } else {
+                    alert('Failed to calculate result');
+                }
+            } catch (error) {
+                console.error('Quiz calculation error:', error);
+                alert('Error calculating result');
+            }
+        }
+
+        function showQuizResult() {
+            const container = document.getElementById('quizQuestions');
+            const resultDiv = document.getElementById('quizResult');
+            const nextBtn = document.getElementById('quizNextBtn');
+            const progress = document.getElementById('quizProgress');
+            
+            container.innerHTML = '';
+            progress.textContent = 'Quiz Complete';
+            nextBtn.style.display = 'none';
+            
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `
+                <div class="quiz-result">
+                    <div>Based on your answers, your suggested fatigue level is:</div>
+                    <div class="quiz-result-level">${quizResult}/10</div>
+                    <div class="quiz-result-actions">
+                        <button class="btn btn-secondary" onclick="rejectQuizResult()">No, that's not right</button>
+                        <button class="btn btn-primary" onclick="acceptQuizResult()">Yes, update my fatigue level</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function acceptQuizResult() {
+            try {
+                const response = await fetch(`/api/profile/${userId}/update-fatigue`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ fatigueLevel: quizResult })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    userProfile = data.profile;
+                    updateProfileDisplay();
+                    closeFatigueQuiz();
+                    alert(`Your fatigue level has been updated to ${quizResult}/10`);
+                } else {
+                    alert('Failed to update fatigue level');
+                }
+            } catch (error) {
+                console.error('Fatigue update error:', error);
+                alert('Error updating fatigue level');
+            }
+        }
+
+        function rejectQuizResult() {
+            closeFatigueQuiz();
+        }
+
+        function closeFatigueQuiz() {
+            fatigueQuizModal.style.display = 'none';
+            currentQuizQuestion = 0;
+            quizAnswers = [];
+            quizResult = null;
+        }
+
+        // Breathing Exercise Functions
+        let breathingTimers = {};
+
+        function startBreathingExercise(id, duration, pattern) {
+            const timerEl = document.getElementById(`breathing-timer-${id}`);
+            const controlsEl = document.getElementById(`breathing-controls-${id}`);
+            const startBtn = controlsEl.querySelector('.breathing-btn');
+            const stopBtn = startBtn.nextElementSibling;
+            
+            if (breathingTimers[id]) {
+                clearInterval(breathingTimers[id]);
+            }
+            
+            let remaining = duration;
+            timerEl.textContent = `${remaining}s`;
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'block';
+            
+            breathingTimers[id] = setInterval(() => {
+                remaining--;
+                timerEl.textContent = `${remaining}s`;
+                
+                if (remaining <= 0) {
+                    stopBreathingExercise(id);
+                }
+            }, 1000);
+        }
+
+        function stopBreathingExercise(id) {
+            if (breathingTimers[id]) {
+                clearInterval(breathingTimers[id]);
+                delete breathingTimers[id];
+            }
+            
+            const timerEl = document.getElementById(`breathing-timer-${id}`);
+            const controlsEl = document.getElementById(`breathing-controls-${id}`);
+            const startBtn = controlsEl.querySelector('.breathing-btn');
+            const stopBtn = startBtn.nextElementSibling;
+            
+            startBtn.style.display = 'block';
+            stopBtn.style.display = 'none';
+        }
+
+        // Show profile modal
+        function showProfileModal() {
+            profileModal.style.display = 'flex';
+            syncFatigueInputs('profileFatigue', 'profileFatigueSlider');
+        }
+
+        // Skip profile creation
+        function skipProfile() {
+            profileModal.style.display = 'none';
+            if (isConnected && !currentChatId) {
+                showWelcomeMessage();
+            }
+        }
+
+        // Save profile
+        async function saveProfile(event) {
+            if (event) event.preventDefault();
+            
+            const name = document.getElementById('profileName').value.trim() || null;
+            const age = document.getElementById('profileAge').value ? parseInt(document.getElementById('profileAge').value) : null;
+            const fatigue = document.getElementById('profileFatigue').value ? parseFloat(document.getElementById('profileFatigue').value) : null;
+            
+            try {
+                const response = await fetch(`/api/profile/${userId}`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, age, current_fatigue_level: fatigue })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    userProfile = data.profile;
+                    updateProfileDisplay();
+                    profileModal.style.display = 'none';
+                    
+                    if (isConnected && !currentChatId) {
+                        showWelcomeMessage();
+                    }
+                }
+            } catch (error) {
+                console.error('Profile save error:', error);
+                alert('Failed to save profile. Please try again.');
+            }
+        }
+
+        // Show fatigue rating modal
+        function showFatigueModal() {
+            fatigueModal.style.display = 'flex';
+            syncFatigueInputs('currentFatigue', 'currentFatigueSlider');
+        }
+
+        // Handle fatigue rating submission
+        async function handleFatigueRating(event) {
+            if (event) event.preventDefault();
+            
+            const fatigue = parseFloat(document.getElementById('currentFatigue').value);
+            if (isNaN(fatigue) || fatigue < 1 || fatigue > 10) {
+                alert('Please enter a valid fatigue level between 1.0 and 10.0');
+                return;
+            }
+            
+            currentFatigueLevel = fatigue;
+            fatigueModal.style.display = 'none';
+            
+            // Mark that fatigue was asked today
+            try {
+                await fetch(`/api/profile/${userId}/fatigue-asked`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            } catch (error) {
+                console.error('Failed to update fatigue asked date:', error);
+            }
+            
+            // Create chat in database with fatigue level
+            if (currentChatId) {
+                try {
+                    await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            userId: userId,
+                            chatId: currentChatId,
+                            message: '__INIT__', // Special marker for initialization
+                            initialFatigueLevel: currentFatigueLevel
+                        })
+                    });
+                } catch (error) {
+                    console.error('Failed to create chat:', error);
+                }
+            }
+            
+            // Show welcome message after fatigue rating
+            if (isConnected) {
+                showWelcomeMessage();
+            }
+        }
+        
+        // Check if fatigue should be asked
+        async function shouldAskFatigue() {
+            try {
+                const response = await fetch(`/api/profile/${userId}/should-ask-fatigue`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    return data;
+                }
+            } catch (error) {
+                console.error('Failed to check fatigue status:', error);
+            }
+            return { shouldAsk: true, reason: 'error' };
+        }
+
+        // Update connection status
+        function updateConnectionStatus(connected, message = '') {
+            isConnected = connected;
+            connectionStatus.textContent = connected ? 'Connected ✓' : (message || 'Disconnected');
+            connectionStatus.className = `status ${connected ? 'connected' : 'error'}`;
+            
+            messageInput.disabled = !connected;
+            sendBtn.disabled = !connected;
+            
+            if (connected) {
+                connectionLoader.style.display = 'none';
+                if (!currentChatId) {
+                    showWelcomeMessage();
+                }
+            }
+        }
+
+        // Show welcome message - personalized and proactive
+        async function showWelcomeMessage() {
+            if (welcomeScreen) {
+                welcomeScreen.style.display = 'none';
+            }
+            
+            // Get dynamic profile for personalized greeting
+            let dynamicProfile = '';
+            try {
+                const profileResponse = await fetch(`/api/profile/${userId}`, {
+                    credentials: 'include'
+                });
+                if (profileResponse.ok) {
+                    const profileData = await profileResponse.json();
+                    if (profileData.profile?.dynamic_profile) {
+                        dynamicProfile = profileData.profile.dynamic_profile;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load profile for welcome:', error);
+            }
+            
+            // Generate personalized welcome message via API
+            try {
+                const response = await fetch('/api/welcome-message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        userId: userId,
+                        userProfile: userProfile,
+                        currentFatigueLevel: currentFatigueLevel,
+                        dynamicProfile: dynamicProfile
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addMessage(data.message, false);
+                } else {
+                    // Fallback to default message
+                    showDefaultWelcomeMessage();
+                }
+            } catch (error) {
+                console.error('Welcome message error:', error);
+                showDefaultWelcomeMessage();
+            }
+        }
+        
+        // Default welcome message fallback
+        function showDefaultWelcomeMessage() {
+            const greeting = userProfile?.name 
+                ? `Hello ${userProfile.name}! I'm Untire Coach`
+                : "Hello! I'm Untire Coach";
+            
+            const fatigueNote = currentFatigueLevel 
+                ? `\n\nI see you're experiencing a fatigue level of ${currentFatigueLevel}/10 right now. I want you to know that I understand how challenging this can be, and I'm here to support you in a way that respects where you're at today.`
+                : '';
+            
+            addMessage(`${greeting}\n\nI'm here to support you through cancer-related fatigue with gentle, practical strategies. I understand this journey can feel overwhelming, and I want you to know that what you're experiencing is valid and you're not alone.${fatigueNote}\n\nWhat brings you here today? I'm here to listen and help however I can.`, false);
+        }
+
+        // Add message to chat (display only, not saved to DB here)
+        function addMessage(content, isUser, timestamp = null, media = null) {
+            if (welcomeScreen && welcomeScreen.style.display !== 'none') {
+                welcomeScreen.style.display = 'none';
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user' : 'ai'}`;
+            
+            const avatar = document.createElement('div');
+            avatar.className = `avatar ${isUser ? 'user' : 'ai'}`;
+            avatar.textContent = isUser ? 'U' : 'AI';
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.innerHTML = content.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            
+            // Handle media (videos or breathing exercises)
+            let videos = null;
+            let breathing = null;
+            
+            if (media) {
+                if (Array.isArray(media)) {
+                    // Legacy format - just videos array
+                    videos = media;
+                } else {
+                    // New format - object with videos and breathing
+                    videos = media.videos;
+                    breathing = media.breathing;
+                }
+            }
+            
+            // Add video widgets if provided
+            if (videos && Array.isArray(videos) && videos.length > 0) {
+                console.log('Adding videos to message:', videos);
+                videos.forEach(video => {
+                    if (video && video.embedUrl) {
+                        const videoContainer = document.createElement('div');
+                        videoContainer.className = 'video-widget';
+                        videoContainer.innerHTML = `
+                            <div class="video-title">${video.title || 'Video'}</div>
+                            <iframe 
+                                src="${video.embedUrl}" 
+                                frameborder="0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                allowfullscreen>
+                            </iframe>
+                        `;
+                        contentDiv.appendChild(videoContainer);
+                    }
+                });
+            }
+            
+            // Add breathing exercise widgets if provided
+            if (breathing && breathing.length > 0) {
+                breathing.forEach(exercise => {
+                    const exerciseId = Date.now() + Math.random();
+                    const breathingContainer = document.createElement('div');
+                    breathingContainer.className = 'breathing-widget';
+                    breathingContainer.innerHTML = `
+                        <div class="breathing-title">${exercise.title}</div>
+                        <div class="breathing-content">
+                            <div class="breathing-pattern">${exercise.pattern}</div>
+                            <div class="breathing-timer" id="breathing-timer-${exerciseId}">${exercise.duration}s</div>
+                            <div class="breathing-controls" id="breathing-controls-${exerciseId}">
+                                <button class="breathing-btn" onclick="startBreathingExercise(${exerciseId}, ${exercise.duration}, '${exercise.pattern.replace(/'/g, "\\'")}')">Start</button>
+                                <button class="breathing-btn" onclick="stopBreathingExercise(${exerciseId})" style="display:none;">Stop</button>
+                            </div>
+                            ${exercise.embedCode ? `<div style="margin-top:1rem;">${exercise.embedCode}</div>` : ''}
+                        </div>
+                    `;
+                    contentDiv.appendChild(breathingContainer);
+                });
+            }
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+            
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(contentDiv);
+            contentDiv.appendChild(timeDiv);
+            
+            messages.appendChild(messageDiv);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        // Show typing indicator
+        function showTyping() {
+            const typingDiv = document.createElement('div');
+            typingDiv.id = 'typing';
+            typingDiv.className = 'message ai';
+            typingDiv.innerHTML = `
+                <div class="avatar ai">AI</div>
+                <div class="message-content">
+                    <div class="typing">
+                        <span>Untire Coach is thinking</span>
+                        <div class="typing-dots">
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            messages.appendChild(typingDiv);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        // Hide typing indicator
+        function hideTyping() {
+            const typingDiv = document.getElementById('typing');
+            if (typingDiv) typingDiv.remove();
+        }
+
+        // Auto-resize textarea
+        function autoResizeTextarea() {
+            messageInput.style.height = 'auto';
+            messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+        }
+
+        // Send message
+        async function sendMessage() {
+            const text = messageInput.value.trim();
+            if (!text || !isConnected) return;
+            
+            // Skip initialization messages
+            if (text === '__INIT__') return;
+
+            // Create new chat if none exists
+            if (!currentChatId) {
+                await startNewChat();
+                // Wait a bit for chat to be created if fatigue modal was shown
+                if (fatigueModal.style.display !== 'none') {
+                    return; // Don't send message yet, wait for fatigue rating
+                }
+            }
+            
+            // Ensure chat exists before sending
+            if (!currentChatId) {
+                alert('Please wait for the conversation to initialize');
+                return;
+            }
+
+            addMessage(text, true);
+            messageInput.value = '';
+            autoResizeTextarea();
+            
+            messageInput.disabled = true;
+            sendBtn.disabled = true;
+            showTyping();
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        chatId: currentChatId,
+                        message: text,
+                        initialFatigueLevel: currentFatigueLevel
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    hideTyping();
+                    // Handle both videos and breathing exercises
+                    const media = {
+                        videos: (data.videos && Array.isArray(data.videos) && data.videos.length > 0) ? data.videos : null,
+                        breathing: (data.breathing && Array.isArray(data.breathing) && data.breathing.length > 0) ? data.breathing : null
+                    };
+                    addMessage(data.response, false, null, (media.videos || media.breathing) ? media : null);
+                    
+                    // Debug logging
+                    if (data.videos && data.videos.length > 0) {
+                        console.log('Videos received:', data.videos);
+                    }
+                    
+                    // Reload chat history to show updated title
+                    await loadChatHistory();
+                    
+                    // Refresh profile to get updated dynamic profile
+                    await loadProfile();
+                } else {
+                    const errorData = await response.json();
+                    hideTyping();
+                    const errorMsg = errorData.details || errorData.error || response.status;
+                    addMessage('Error: ' + errorMsg, false);
+                    console.error('Chat error details:', errorData);
+                }
+            } catch (error) {
+                console.error('Send error:', error);
+                hideTyping();
+                addMessage('Connection error: ' + error.message, false);
+            }
+
+            if (isConnected) {
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                messageInput.focus();
+            }
+        }
+
+        // Start new chat
+        async function startNewChat() {
+            currentChatId = generateId();
+            currentFatigueLevel = null; // Reset for new chat
+            
+            messages.innerHTML = '';
+            chatTitle.textContent = 'New Conversation';
+            
+            // Check if we should ask for fatigue rating
+            if (isConnected) {
+                const fatigueCheck = await shouldAskFatigue();
+                
+                if (fatigueCheck.shouldAsk) {
+                    // Ask for fatigue rating
+                    showFatigueModal();
+                } else if (fatigueCheck.reason === 'has_typical_fatigue') {
+                    // Use profile's typical fatigue level
+                    currentFatigueLevel = fatigueCheck.typicalFatigue;
+                    
+                    // Create chat in database with typical fatigue level
+                    try {
+                        await fetch('/api/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                userId: userId,
+                                chatId: currentChatId,
+                                message: '__INIT__', // Special marker for initialization
+                                initialFatigueLevel: currentFatigueLevel
+                            })
+                        });
+                    } catch (error) {
+                        console.error('Failed to create chat:', error);
+                    }
+                    
+                    // Show welcome message
+                showWelcomeMessage();
+                } else {
+                    // Already asked today, use profile's typical fatigue or proceed without
+                    if (userProfile?.current_fatigue_level !== null && userProfile?.current_fatigue_level !== undefined) {
+                        currentFatigueLevel = userProfile.current_fatigue_level;
+                    }
+                    
+                    // Create chat in database
+                    try {
+                        await fetch('/api/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({
+                                chatId: currentChatId,
+                                message: '__INIT__',
+                                initialFatigueLevel: currentFatigueLevel
+                            })
+                        });
+                    } catch (error) {
+                        console.error('Failed to create chat:', error);
+                    }
+                    
+                    showWelcomeMessage();
+                }
+            }
+            
+            await loadChatHistory();
+            messageInput.focus();
+        }
+
+        // Load existing chat
+        async function loadChat(chatId) {
+            try {
+                const response = await fetch(`/api/chat/${chatId}`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+            currentChatId = chatId;
+                    currentFatigueLevel = data.chat.initial_fatigue_level;
+            
+            messages.innerHTML = '';
+                    chatTitle.textContent = data.chat.title || 'New Conversation';
+                    
+                    data.messages.forEach(msg => {
+                        const media = {
+                            videos: msg.videos || null,
+                            breathing: msg.breathing || null
+                        };
+                        addMessage(msg.content, msg.role === 'user', msg.timestamp, (media.videos || media.breathing) ? media : null);
+                    });
+                    
+                    // Update connection status to enable input
+                    if (!isConnected) {
+                        updateConnectionStatus(true);
+                    }
+                    
+                    await loadChatHistory();
+            messageInput.focus();
+                } else {
+                    alert('Failed to load chat');
+                }
+            } catch (error) {
+                console.error('Load chat error:', error);
+                alert('Error loading chat');
+            }
+        }
+
+        // Load chat history from database
+        async function loadChatHistory() {
+            try {
+                const response = await fetch(`/api/chats/${userId}`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    chats = data.chats || [];
+                    updateChatHistory();
+                }
+            } catch (error) {
+                console.error('Chat history load error:', error);
+            }
+        }
+
+        // Update chat history sidebar
+        function updateChatHistory() {
+            chatHistory.innerHTML = '';
+            
+            if (chats.length === 0) {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.style.padding = '1rem';
+                emptyMsg.style.color = '#5C5C5C';
+                emptyMsg.style.fontSize = '0.875rem';
+                emptyMsg.style.textAlign = 'center';
+                emptyMsg.textContent = 'No previous conversations';
+                chatHistory.appendChild(emptyMsg);
+                return;
+            }
+            
+            chats.slice(0, 10).forEach(chat => {
+                const chatItem = document.createElement('div');
+                chatItem.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
+                chatItem.onclick = () => loadChat(chat.id);
+                
+                const title = document.createElement('div');
+                title.className = 'chat-item-title';
+                title.textContent = chat.title || 'New Chat';
+                
+                const preview = document.createElement('div');
+                preview.className = 'chat-item-preview';
+                preview.textContent = chat.initial_fatigue_level ? `Fatigue: ${chat.initial_fatigue_level}/10` : 'No messages yet';
+                
+                chatItem.appendChild(title);
+                chatItem.appendChild(preview);
+                chatHistory.appendChild(chatItem);
+            });
+        }
+
+        // Export current chat
+        async function exportChat() {
+            if (!currentChatId) {
+                alert('No chat to export');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/chat/${currentChatId}`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    const transcript = data.messages.map(m => 
+                        `${m.role === 'user' ? 'YOU' : 'UNTIRE COACH'}: ${m.content}`
+            ).join('\n\n');
+            
+            const blob = new Blob([transcript], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+                    a.download = `untire-coach-${(data.chat.title || 'chat').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+                } else {
+                    alert('Failed to export chat');
+                }
+            } catch (error) {
+                console.error('Export error:', error);
+                alert('Error exporting chat');
+            }
+        }
+
+        // Clear current chat
+        async function clearCurrentChat() {
+            if (!currentChatId) return;
+            
+            if (confirm('Are you sure you want to delete this conversation?')) {
+                try {
+                    const response = await fetch(`/api/chat/${currentChatId}`, {
+                        method: 'DELETE',
+                        credentials: 'include'
+                    });
+                    if (response.ok) {
+                        await startNewChat();
+                    } else {
+                        alert('Failed to delete chat');
+                    }
+                } catch (error) {
+                    console.error('Delete error:', error);
+                    alert('Error deleting chat');
+                }
+            }
+        }
+
+        // Clear all user info and reset to profile creation
+        async function clearAllInfo() {
+            if (!confirm('Are you sure you want to delete all your information? This will permanently delete your profile, all conversations, and messages. This action cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/user/${userId}/clear-all`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    // Clear local state
+                    userProfile = null;
+                    currentChatId = null;
+                    currentFatigueLevel = null;
+                    chats = [];
+                    
+                    // Clear localStorage
+                    localStorage.removeItem('untire_userId');
+                    
+                    // Generate new userId
+                    userId = generateId();
+                    localStorage.setItem('untire_userId', userId);
+                    
+                    // Clear UI
+                    messages.innerHTML = '';
+                    chatTitle.textContent = 'New Conversation';
+                    profileInfo.style.display = 'none';
+                    clearInfoBtn.style.display = 'none';
+                    welcomeScreen.style.display = 'flex';
+                    
+                    // Reload chat history (will be empty)
+                    await loadChatHistory();
+                    
+                    // Show profile creation modal
+                    showProfileModal();
+                    
+                    alert('All information has been cleared. Please create a new profile.');
+                } else {
+                    const errorData = await response.json();
+                    alert('Failed to clear information: ' + (errorData.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Clear info error:', error);
+                alert('Error clearing information: ' + error.message);
+            }
+        }
+
+        // Settings functions
+        async function loadSettings() {
+            try {
+                const response = await fetch(`/api/settings/${userId}`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    userSettings = data.settings;
+                    updateSettingsUI();
+                }
+            } catch (error) {
+                console.error('Settings load error:', error);
+            }
+        }
+
+        function updateSettingsUI() {
+            if (!userSettings) return;
+            
+            // Set behavior type
+            const behaviorRadio = document.querySelector(`input[name="behavior_type"][value="${userSettings.behavior_type}"]`);
+            if (behaviorRadio) behaviorRadio.checked = true;
+            
+            // Set checkboxes
+            document.getElementById('agenticFeatures').checked = userSettings.agentic_features === 1;
+            document.getElementById('chatOnly').checked = userSettings.chat_only === 1;
+        }
+
+        function openSettings() {
+            loadSettings();
+            settingsModal.style.display = 'flex';
+        }
+
+        function closeSettings() {
+            settingsModal.style.display = 'none';
+        }
+
+        async function saveSettings(event) {
+            if (event) event.preventDefault();
+            
+            const behaviorType = document.querySelector('input[name="behavior_type"]:checked').value;
+            const agenticFeatures = document.getElementById('agenticFeatures').checked;
+            const chatOnly = document.getElementById('chatOnly').checked;
+            
+            try {
+                const response = await fetch(`/api/settings/${userId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        behavior_type: behaviorType,
+                        agentic_features: agenticFeatures ? 1 : 0,
+                        chat_only: chatOnly ? 1 : 0
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    userSettings = data.settings;
+                    closeSettings();
+                    alert('Settings saved successfully!');
+                } else {
+                    alert('Failed to save settings');
+                }
+            } catch (error) {
+                console.error('Settings save error:', error);
+                alert('Error saving settings');
+            }
+        }
+
+        // Check server connection
+        async function checkConnection() {
+            try {
+                const response = await fetch('/api/health', {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    updateConnectionStatus(true);
+                } else {
+                    throw new Error('Server responded with status: ' + response.status);
+                }
+            } catch (error) {
+                console.error('Connection error:', error);
+                updateConnectionStatus(false, 'Connection failed: ' + error.message);
+            }
+        }
+
+        // Event listeners
+        sendBtn.addEventListener('click', sendMessage);
+        messageInput.addEventListener('input', autoResizeTextarea);
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Profile form submission
+        document.getElementById('profileForm').addEventListener('submit', saveProfile);
+        document.getElementById('fatigueForm').addEventListener('submit', handleFatigueRating);
+        document.getElementById('settingsForm').addEventListener('submit', saveSettings);
+
+        // Authentication functions
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/auth/me', {
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data.user;
+                    userId = data.user.id;
+                    showApp();
+                    return true;
+                } else {
+                    showLogin();
+                    return false;
+                }
+            } catch (error) {
+                console.error('Auth check error:', error);
+                showLogin();
+                return false;
+            }
+        }
+
+        async function handleLogin(event) {
+            if (event) event.preventDefault();
+            
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            
+            loginError.style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data.user;
+                    userId = data.user.id;
+                    showApp();
+                } else {
+                    const errorData = await response.json();
+                    loginError.textContent = errorData.error || 'Login failed';
+                    loginError.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                loginError.textContent = 'Connection error. Please try again.';
+                loginError.style.display = 'block';
+            }
+        }
+
+        async function handleLogout() {
+            try {
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+            
+            currentUser = null;
+            userId = null;
+            userProfile = null;
+            currentChatId = null;
+            chats = [];
+            showLogin();
+        }
+
+        function showLogin() {
+            loginScreen.style.display = 'flex';
+            app.classList.remove('authenticated');
+        }
+
+        async function showApp() {
+            loginScreen.style.display = 'none';
+            app.classList.add('authenticated');
+            
+            // Store userId in localStorage
+            localStorage.setItem('untire_userId', userId);
+            
+            // Load profile, settings, and chat history
+            await loadProfile();
+            await loadSettings();
+            await loadChatHistory();
+            
+            // Check connection
+            await checkConnection();
+            
+            // Auto-focus input when connected
+            const focusInterval = setInterval(() => {
+                if (isConnected) {
+                    messageInput.focus();
+                    clearInterval(focusInterval);
+                }
+            }, 100);
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Set up login form
+            loginForm.addEventListener('submit', handleLogin);
+            
+            // Check authentication status
+            await checkAuth();
+        });
+    </script>
+</body>
+</html>
