@@ -36,11 +36,14 @@ sudo systemctl start mongod
 net start MongoDB
 ```
 
-### 4. Create Admin Account
-```bash
-node setupAdmin.js
-```
-Enter your admin username and password.
+### 4. Default Admin Account
+The system automatically creates a default admin account on first run:
+- **Username**: `admin`
+- **Password**: `UntireAdmin2024!`
+
+⚠️ **IMPORTANT**: Change this password after first login!
+
+(Optional: Run `node setupAdmin.js` to create a custom admin account)
 
 ### 5. Seed Data (Optional)
 ```bash
@@ -89,15 +92,14 @@ NODE_ENV=production
 ### 5. Deploy
 Railway automatically deploys! Wait 2-3 minutes.
 
-### 6. Create Admin Account
-```bash
-# Install Railway CLI
-npm install -g @railway/cli
+### 6. Default Admin Account
+The system automatically creates a default admin account:
+- **Username**: `admin`
+- **Password**: `UntireAdmin2024!`
 
-# Login and run setup
-railway login
-railway run node setupAdmin.js
-```
+⚠️ **IMPORTANT**: Change this password immediately after first login!
+
+Access admin console at: `https://your-app.up.railway.app/admin.html`
 
 ### 7. Access Your App
 Railway provides URL like: `https://your-app.up.railway.app`

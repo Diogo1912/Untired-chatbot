@@ -24,10 +24,46 @@ async function initializeDatabase() {
     await db.collection('ai_settings').createIndex({ key: 1 }, { unique: true });
     await db.collection('saved_memories').createIndex({ user_id: 1 });
     
+    // Auto-create default admin account if none exists
+    await createDefaultAdminIfNeeded();
+    
     console.log('✅ MongoDB connected successfully');
   } catch (error) {
     console.error('MongoDB connection error:', error);
     throw error;
+  }
+}
+
+// Create default admin account if no admin exists
+async function createDefaultAdminIfNeeded() {
+  try {
+    const crypto = require('crypto');
+    
+    // Check if any admin exists
+    const adminExists = await db.collection('users').findOne({ is_admin: true });
+    
+    if (!adminExists) {
+      const defaultUsername = 'admin';
+      const defaultPassword = 'UntireAdmin2024!'; // Change this in production!
+      const passwordHash = crypto.createHash('sha256').update(defaultPassword).digest('hex');
+      
+      await db.collection('users').insertOne({
+        _id: `admin_${Date.now()}`,
+        username: defaultUsername,
+        password_hash: passwordHash,
+        is_admin: true,
+        created_at: new Date(),
+        updated_at: new Date()
+      });
+      
+      console.log('🔐 Default admin account created');
+      console.log('   Username: admin');
+      console.log('   Password: UntireAdmin2024!');
+      console.log('   ⚠️  IMPORTANT: Change this password after first login!');
+    }
+  } catch (error) {
+    console.error('Error creating default admin:', error);
+    // Don't throw - let the app continue even if admin creation fails
   }
 }
 

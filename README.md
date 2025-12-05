@@ -101,11 +101,14 @@ sudo systemctl start mongod
 net start MongoDB
 ```
 
-5. **Create the admin account**
-```bash
-node setupAdmin.js
-```
-Follow the prompts to create your admin username and password.
+5. **Default admin account is auto-created**
+On first run, the system automatically creates:
+- **Username**: `admin`
+- **Password**: `UntireAdmin2024!`
+
+⚠️ **Change this password immediately** after first login at `/admin.html`
+
+(Optional: Run `node setupAdmin.js` to create additional admin accounts)
 
 6. **Seed the database** (optional)
 ```bash
