@@ -33,14 +33,14 @@ async function initializeDatabase() {
       db = client.db();
       
       // Create indexes
-      await db.collection('users').createIndex({ username: 1 }, { unique: true, sparse: true });
-      await db.collection('sessions').createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
-      await db.collection('profiles').createIndex({ user_id: 1 }, { unique: true });
-      await db.collection('chats').createIndex({ user_id: 1 });
-      await db.collection('messages').createIndex({ chat_id: 1 });
-      await db.collection('user_settings').createIndex({ user_id: 1 }, { unique: true });
-      await db.collection('ai_settings').createIndex({ key: 1 }, { unique: true });
-      await db.collection('saved_memories').createIndex({ user_id: 1 });
+      await checkDB().collection('users').createIndex({ username: 1 }, { unique: true, sparse: true });
+      await checkDB().collection('sessions').createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
+      await checkDB().collection('profiles').createIndex({ user_id: 1 }, { unique: true });
+      await checkDB().collection('chats').createIndex({ user_id: 1 });
+      await checkDB().collection('messages').createIndex({ chat_id: 1 });
+      await checkDB().collection('user_settings').createIndex({ user_id: 1 }, { unique: true });
+      await checkDB().collection('ai_settings').createIndex({ key: 1 }, { unique: true });
+      await checkDB().collection('saved_memories').createIndex({ user_id: 1 });
       
       // Auto-create default admin account if none exists
       await createDefaultAdminIfNeeded();
@@ -76,14 +76,14 @@ async function createDefaultAdminIfNeeded() {
     const crypto = require('crypto');
     
     // Check if any admin exists
-    const adminExists = await db.collection('users').findOne({ is_admin: true });
+    const adminExists = await checkDB().collection('users').findOne({ is_admin: true });
     
     if (!adminExists) {
       const defaultUsername = 'admin';
       const defaultPassword = 'UntireAdmin2024!'; // Change this in production!
       const passwordHash = crypto.createHash('sha256').update(defaultPassword).digest('hex');
       
-      await db.collection('users').insertOne({
+      await checkDB().collection('users').insertOne({
         _id: `admin_${Date.now()}`,
         username: defaultUsername,
         password_hash: passwordHash,
@@ -103,9 +103,17 @@ async function createDefaultAdminIfNeeded() {
   }
 }
 
+// Helper to check database connection
+function checkDB() {
+  if (!db) {
+    throw new Error('Database not connected. Please configure MONGODB_URI environment variable.');
+  }
+  return db;
+}
+
 // User operations
 async function createUser(userId) {
-  await db.collection('users').insertOne({
+  await checkDB().collection('users').insertOne({
     _id: userId,
     created_at: new Date(),
     updated_at: new Date()
@@ -114,7 +122,7 @@ async function createUser(userId) {
 }
 
 async function getUser(userId) {
-  return await db.collection('users').findOne({ _id: userId });
+  return await checkDB().collection('users').findOne({ _id: userId });
 }
 
 async function getOrCreateUser(userId) {
@@ -127,12 +135,16 @@ async function getOrCreateUser(userId) {
 }
 
 async function getUserByUsername(username) {
-  return await db.collection('users').findOne({ username });
+  if (!db) {
+    console.error('Database not connected');
+    return null;
+  }
+  return await checkDB().collection('users').findOne({ username });
 }
 
 async function createUserWithAuth(username, passwordHash, isAdmin = false) {
   const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  await db.collection('users').insertOne({
+  await checkDB().collection('users').insertOne({
     _id: userId,
     username,
     password_hash: passwordHash,
@@ -140,18 +152,18 @@ async function createUserWithAuth(username, passwordHash, isAdmin = false) {
     created_at: new Date(),
     updated_at: new Date()
   });
-  return await db.collection('users').findOne({ _id: userId });
+  return await checkDB().collection('users').findOne({ _id: userId });
 }
 
 async function getUserById(userId) {
-  return await db.collection('users').findOne(
+  return await checkDB().collection('users').findOne(
     { _id: userId },
     { projection: { password_hash: 0 } }
   );
 }
 
 async function getAllUsers() {
-  return await db.collection('users').find(
+  return await checkDB().collection('users').find(
     {},
     { projection: { password_hash: 0 } }
   ).toArray();
@@ -172,28 +184,28 @@ async function deleteUser(userId) {
 
 // Session operations
 async function createSession(userId, sessionId, expiresAt) {
-  await db.collection('sessions').insertOne({
+  await checkDB().collection('sessions').insertOne({
     _id: sessionId,
     user_id: userId,
     expires_at: new Date(expiresAt),
     created_at: new Date()
   });
-  return await db.collection('sessions').findOne({ _id: sessionId });
+  return await checkDB().collection('sessions').findOne({ _id: sessionId });
 }
 
 async function getSession(sessionId) {
-  return await db.collection('sessions').findOne({
+  return await checkDB().collection('sessions').findOne({
     _id: sessionId,
     expires_at: { $gt: new Date() }
   });
 }
 
 async function deleteSession(sessionId) {
-  await db.collection('sessions').deleteOne({ _id: sessionId });
+  await checkDB().collection('sessions').deleteOne({ _id: sessionId });
 }
 
 async function deleteUserSessions(userId) {
-  await db.collection('sessions').deleteMany({ user_id: userId });
+  await checkDB().collection('sessions').deleteMany({ user_id: userId });
 }
 
 // Profile operations
@@ -209,7 +221,7 @@ async function createOrUpdateProfile(userId, profileData) {
     }
   };
   
-  await db.collection('profiles').updateOne(
+  await checkDB().collection('profiles').updateOne(
     { user_id: userId },
     updateData,
     { upsert: true }
@@ -219,12 +231,12 @@ async function createOrUpdateProfile(userId, profileData) {
 }
 
 async function getProfile(userId) {
-  return await db.collection('profiles').findOne({ user_id: userId });
+  return await checkDB().collection('profiles').findOne({ user_id: userId });
 }
 
 async function updateLastFatigueAskedDate(userId) {
   const today = new Date().toISOString().split('T')[0];
-  await db.collection('profiles').updateOne(
+  await checkDB().collection('profiles').updateOne(
     { user_id: userId },
     { $set: { last_fatigue_asked_date: today } }
   );
@@ -232,7 +244,7 @@ async function updateLastFatigueAskedDate(userId) {
 
 // Chat operations
 async function createChat(chatId, userId, title = 'New Chat', initialFatigueLevel = null) {
-  await db.collection('chats').insertOne({
+  await checkDB().collection('chats').insertOne({
     _id: chatId,
     user_id: userId,
     title,
@@ -244,18 +256,18 @@ async function createChat(chatId, userId, title = 'New Chat', initialFatigueLeve
 }
 
 async function getChat(chatId) {
-  return await db.collection('chats').findOne({ _id: chatId });
+  return await checkDB().collection('chats').findOne({ _id: chatId });
 }
 
 async function updateChatTitle(chatId, title) {
-  await db.collection('chats').updateOne(
+  await checkDB().collection('chats').updateOne(
     { _id: chatId },
     { $set: { title, updated_at: new Date() } }
   );
 }
 
 async function getUserChats(userId, limit = 10) {
-  return await db.collection('chats')
+  return await checkDB().collection('chats')
     .find({ user_id: userId })
     .sort({ updated_at: -1 })
     .limit(limit)
@@ -271,7 +283,7 @@ async function deleteChat(chatId) {
 
 // Message operations
 async function addMessage(chatId, role, content, media = null) {
-  const result = await db.collection('messages').insertOne({
+  const result = await checkDB().collection('messages').insertOne({
     chat_id: chatId,
     role,
     content,
@@ -282,7 +294,7 @@ async function addMessage(chatId, role, content, media = null) {
 }
 
 async function getChatMessages(chatId) {
-  const messages = await db.collection('messages')
+  const messages = await checkDB().collection('messages')
     .find({ chat_id: chatId })
     .sort({ timestamp: 1 })
     .toArray();
@@ -301,7 +313,7 @@ async function deleteAllUserData(userId) {
 
 // User settings operations
 async function getUserSettings(userId) {
-  let settings = await db.collection('user_settings').findOne({ user_id: userId });
+  let settings = await checkDB().collection('user_settings').findOne({ user_id: userId });
   if (!settings) {
     settings = {
       user_id: userId,
@@ -311,13 +323,13 @@ async function getUserSettings(userId) {
       created_at: new Date(),
       updated_at: new Date()
     };
-    await db.collection('user_settings').insertOne(settings);
+    await checkDB().collection('user_settings').insertOne(settings);
   }
   return settings;
 }
 
 async function updateUserSettings(userId, settings) {
-  await db.collection('user_settings').updateOne(
+  await checkDB().collection('user_settings').updateOne(
     { user_id: userId },
     {
       $set: {
@@ -336,7 +348,7 @@ async function updateUserSettings(userId, settings) {
 
 // Dynamic profile operations
 async function updateDynamicProfile(userId, profileText) {
-  await db.collection('profiles').updateOne(
+  await checkDB().collection('profiles').updateOne(
     { user_id: userId },
     {
       $set: {
@@ -354,15 +366,15 @@ async function getDynamicProfile(userId) {
 
 // Video operations
 async function getAllVideos() {
-  return await db.collection('videos').find().sort({ title: 1 }).toArray();
+  return await checkDB().collection('videos').find().sort({ title: 1 }).toArray();
 }
 
 async function getVideosByCategory(category) {
-  return await db.collection('videos').find({ category }).sort({ title: 1 }).toArray();
+  return await checkDB().collection('videos').find({ category }).sort({ title: 1 }).toArray();
 }
 
 async function addVideo(title, url, embedUrl, category = null, tags = null) {
-  const result = await db.collection('videos').insertOne({
+  const result = await checkDB().collection('videos').insertOne({
     title,
     url,
     embed_url: embedUrl,
@@ -370,20 +382,20 @@ async function addVideo(title, url, embedUrl, category = null, tags = null) {
     tags,
     created_at: new Date()
   });
-  return await db.collection('videos').findOne({ _id: result.insertedId });
+  return await checkDB().collection('videos').findOne({ _id: result.insertedId });
 }
 
 async function deleteVideo(videoId) {
-  await db.collection('videos').deleteOne({ _id: videoId });
+  await checkDB().collection('videos').deleteOne({ _id: videoId });
 }
 
 // Breathing exercises operations
 async function getAllBreathingExercises() {
-  return await db.collection('breathing_exercises').find().sort({ title: 1 }).toArray();
+  return await checkDB().collection('breathing_exercises').find().sort({ title: 1 }).toArray();
 }
 
 async function addBreathingExercise(title, description, duration, pattern, embedCode) {
-  const result = await db.collection('breathing_exercises').insertOne({
+  const result = await checkDB().collection('breathing_exercises').insertOne({
     title,
     description,
     duration,
@@ -391,32 +403,32 @@ async function addBreathingExercise(title, description, duration, pattern, embed
     embed_code: embedCode,
     created_at: new Date()
   });
-  return await db.collection('breathing_exercises').findOne({ _id: result.insertedId });
+  return await checkDB().collection('breathing_exercises').findOne({ _id: result.insertedId });
 }
 
 async function deleteBreathingExercise(exerciseId) {
-  await db.collection('breathing_exercises').deleteOne({ _id: exerciseId });
+  await checkDB().collection('breathing_exercises').deleteOne({ _id: exerciseId });
 }
 
 // Fatigue quiz operations
 async function getAllQuizQuestions() {
-  return await db.collection('fatigue_quiz_questions').find().sort({ question_order: 1 }).toArray();
+  return await checkDB().collection('fatigue_quiz_questions').find().sort({ question_order: 1 }).toArray();
 }
 
 async function addQuizQuestion(questionText, questionOrder, options, weight = 1.0) {
-  const result = await db.collection('fatigue_quiz_questions').insertOne({
+  const result = await checkDB().collection('fatigue_quiz_questions').insertOne({
     question_text: questionText,
     question_order: questionOrder,
     options,
     weight,
     created_at: new Date()
   });
-  return await db.collection('fatigue_quiz_questions').findOne({ _id: result.insertedId });
+  return await checkDB().collection('fatigue_quiz_questions').findOne({ _id: result.insertedId });
 }
 
 // AI Settings operations (Admin configurable)
 async function getAISettings() {
-  let settings = await db.collection('ai_settings').findOne({ key: 'global' });
+  let settings = await checkDB().collection('ai_settings').findOne({ key: 'global' });
   if (!settings) {
     settings = {
       key: 'global',
@@ -434,13 +446,13 @@ async function getAISettings() {
       created_at: new Date(),
       updated_at: new Date()
     };
-    await db.collection('ai_settings').insertOne(settings);
+    await checkDB().collection('ai_settings').insertOne(settings);
   }
   return settings;
 }
 
 async function updateAISettings(settings) {
-  await db.collection('ai_settings').updateOne(
+  await checkDB().collection('ai_settings').updateOne(
     { key: 'global' },
     {
       $set: {
@@ -477,14 +489,14 @@ IMPORTANT: This is educational support, not medical advice. Encourage them to di
 
 // Saved memories operations (for card-based memory UI)
 async function getSavedMemories(userId) {
-  return await db.collection('saved_memories')
+  return await checkDB().collection('saved_memories')
     .find({ user_id: userId })
     .sort({ created_at: -1 })
     .toArray();
 }
 
 async function addSavedMemory(userId, title, content, category = null) {
-  const result = await db.collection('saved_memories').insertOne({
+  const result = await checkDB().collection('saved_memories').insertOne({
     user_id: userId,
     title,
     content,
@@ -496,11 +508,11 @@ async function addSavedMemory(userId, title, content, category = null) {
 }
 
 async function deleteSavedMemory(memoryId) {
-  await db.collection('saved_memories').deleteOne({ _id: memoryId });
+  await checkDB().collection('saved_memories').deleteOne({ _id: memoryId });
 }
 
 async function updateSavedMemory(memoryId, updates) {
-  await db.collection('saved_memories').updateOne(
+  await checkDB().collection('saved_memories').updateOne(
     { _id: memoryId },
     { $set: { ...updates, updated_at: new Date() } }
   );
