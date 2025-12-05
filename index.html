@@ -959,6 +959,93 @@
             color: #5C5C5C;
             font-style: italic;
         }
+
+        /* Memory Cards Styles */
+        .memories-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .memory-card {
+            background: white;
+            border: 2px solid #E7DED3;
+            border-radius: 12px;
+            padding: 1rem;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .memory-card:hover {
+            border-color: #FF7A2F;
+            box-shadow: 0 4px 12px rgba(255, 122, 47, 0.1);
+        }
+
+        .memory-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+        }
+
+        .memory-card-title {
+            font-weight: 600;
+            color: #2C2C2C;
+            font-size: 1rem;
+            flex: 1;
+        }
+
+        .memory-card-delete {
+            background: transparent;
+            border: none;
+            color: #D32F2F;
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .memory-card-delete:hover {
+            background: #FFE8D9;
+        }
+
+        .memory-card-content {
+            color: #5C5C5C;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-bottom: 0.75rem;
+        }
+
+        .memory-card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+            color: #999;
+        }
+
+        .memory-category {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background: #FFE8D9;
+            color: #FF7A2F;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+
+        .no-memories {
+            text-align: center;
+            padding: 3rem;
+            color: #5C5C5C;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -1049,6 +1136,44 @@
                     <input type="number" id="profileAge" placeholder="Enter your age" min="1" max="120">
                 </div>
                 <div class="form-group">
+                    <label for="profileGender">Gender (optional)</label>
+                    <select id="profileGender">
+                        <option value="">Prefer not to say</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="non-binary">Non-binary</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="profileEthnicity">Ethnicity (optional)</label>
+                    <input type="text" id="profileEthnicity" placeholder="e.g., Hispanic, Asian, Caucasian">
+                </div>
+                <div class="form-group">
+                    <label for="profileCancerType">Cancer Type (optional)</label>
+                    <input type="text" id="profileCancerType" placeholder="e.g., Breast cancer, Lung cancer">
+                </div>
+                <div class="form-group">
+                    <label for="profileTreatmentStage">Treatment Stage (optional)</label>
+                    <select id="profileTreatmentStage">
+                        <option value="">Select stage</option>
+                        <option value="newly-diagnosed">Newly diagnosed</option>
+                        <option value="in-treatment">Currently in treatment</option>
+                        <option value="post-treatment">Post-treatment</option>
+                        <option value="remission">In remission</option>
+                        <option value="maintenance">Maintenance therapy</option>
+                        <option value="palliative">Palliative care</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="profileDiagnosisDate">Diagnosis Date (optional)</label>
+                    <input type="date" id="profileDiagnosisDate">
+                </div>
+                <div class="form-group">
+                    <label for="profileLocation">Location (optional)</label>
+                    <input type="text" id="profileLocation" placeholder="City, Country">
+                </div>
+                <div class="form-group">
                     <label for="profileFatigue">Typical Fatigue Level (1-10)</label>
                     <div class="fatigue-input-group">
                         <input type="number" id="profileFatigue" step="0.1" min="1" max="10" value="5" placeholder="5.0">
@@ -1101,6 +1226,12 @@
                 <div class="profile-section">
                     <h4>What I Know About You</h4>
                     <div id="dynamicProfileInfo" class="profile-details"></div>
+                </div>
+                <div class="profile-section">
+                    <h4>Saved Memories</h4>
+                    <div id="savedMemories">
+                        <div class="no-memories">Loading memories...</div>
+                    </div>
                 </div>
             </div>
             <div class="modal-actions">
@@ -1258,10 +1389,11 @@
 
         // Update profile display
         function updateProfileDisplay() {
-            if (userProfile && (userProfile.name || userProfile.age || userProfile.current_fatigue_level)) {
+            if (userProfile && (userProfile.name || userProfile.age || userProfile.current_fatigue_level || userProfile.cancer_type)) {
                 let info = '';
                 if (userProfile.name) info += `<strong>${userProfile.name}</strong>`;
                 if (userProfile.age) info += (info ? ', ' : '') + `Age: ${userProfile.age}`;
+                if (userProfile.cancer_type) info += (info ? ' • ' : '') + userProfile.cancer_type;
                 if (userProfile.current_fatigue_level !== null) {
                     info += (info ? ' • ' : '') + `Typical fatigue: ${userProfile.current_fatigue_level}/10`;
                 }
@@ -1291,6 +1423,12 @@
                     let basicHtml = '';
                     if (userProfile?.name) basicHtml += `<strong>Name:</strong> ${userProfile.name}<br>`;
                     if (userProfile?.age) basicHtml += `<strong>Age:</strong> ${userProfile.age}<br>`;
+                    if (userProfile?.gender) basicHtml += `<strong>Gender:</strong> ${userProfile.gender}<br>`;
+                    if (userProfile?.ethnicity) basicHtml += `<strong>Ethnicity:</strong> ${userProfile.ethnicity}<br>`;
+                    if (userProfile?.cancer_type) basicHtml += `<strong>Cancer Type:</strong> ${userProfile.cancer_type}<br>`;
+                    if (userProfile?.treatment_stage) basicHtml += `<strong>Treatment Stage:</strong> ${userProfile.treatment_stage.replace('-', ' ')}<br>`;
+                    if (userProfile?.diagnosis_date) basicHtml += `<strong>Diagnosis Date:</strong> ${new Date(userProfile.diagnosis_date).toLocaleDateString()}<br>`;
+                    if (userProfile?.location) basicHtml += `<strong>Location:</strong> ${userProfile.location}<br>`;
                     if (userProfile?.current_fatigue_level !== null) {
                         basicHtml += `<strong>Typical Fatigue Level:</strong> ${userProfile.current_fatigue_level}/10<br>`;
                     }
@@ -1308,6 +1446,9 @@
                         dynamicInfo.className = 'profile-details empty';
                     }
                     
+                    // Load saved memories
+                    loadSavedMemories();
+                    
                     profileViewModal.style.display = 'flex';
                 } else {
                     alert('Failed to load profile');
@@ -1315,6 +1456,76 @@
             } catch (error) {
                 console.error('Profile view error:', error);
                 alert('Failed to load profile');
+            }
+        }
+
+        // Load saved memories
+        async function loadSavedMemories() {
+            try {
+                const response = await fetch(`/api/memories/${userId}`, {
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const memories = data.memories || [];
+                    const container = document.getElementById('savedMemories');
+                    
+                    if (memories.length === 0) {
+                        container.innerHTML = '<div class="no-memories">No saved memories yet. Important insights from your conversations will be saved here.</div>';
+                        return;
+                    }
+                    
+                    container.innerHTML = '<div class="memories-container"></div>';
+                    const grid = container.querySelector('.memories-container');
+                    
+                    memories.forEach(memory => {
+                        const card = document.createElement('div');
+                        card.className = 'memory-card';
+                        card.innerHTML = `
+                            <div class="memory-card-header">
+                                <div class="memory-card-title">${memory.title || 'Memory'}</div>
+                                <button class="memory-card-delete" onclick="deleteMemory('${memory._id}')" title="Delete memory">×</button>
+                            </div>
+                            <div class="memory-card-content">${memory.content}</div>
+                            <div class="memory-card-footer">
+                                ${memory.category ? `<span class="memory-category">${memory.category}</span>` : '<span></span>'}
+                                <span>${new Date(memory.created_at).toLocaleDateString()}</span>
+                            </div>
+                        `;
+                        grid.appendChild(card);
+                    });
+                } else {
+                    throw new Error('Failed to load memories');
+                }
+            } catch (error) {
+                console.error('Load memories error:', error);
+                const container = document.getElementById('savedMemories');
+                container.innerHTML = '<div class="no-memories">Failed to load memories</div>';
+            }
+        }
+
+        // Delete memory
+        async function deleteMemory(memoryId) {
+            if (!confirm('Are you sure you want to delete this memory?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/memories/${memoryId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    // Reload memories
+                    loadSavedMemories();
+                } else {
+                    alert('Failed to delete memory');
+                }
+            } catch (error) {
+                console.error('Delete memory error:', error);
+                alert('Failed to delete memory');
             }
         }
 
@@ -1560,6 +1771,12 @@
             
             const name = document.getElementById('profileName').value.trim() || null;
             const age = document.getElementById('profileAge').value ? parseInt(document.getElementById('profileAge').value) : null;
+            const gender = document.getElementById('profileGender').value || null;
+            const ethnicity = document.getElementById('profileEthnicity').value.trim() || null;
+            const cancerType = document.getElementById('profileCancerType').value.trim() || null;
+            const treatmentStage = document.getElementById('profileTreatmentStage').value || null;
+            const diagnosisDate = document.getElementById('profileDiagnosisDate').value || null;
+            const location = document.getElementById('profileLocation').value.trim() || null;
             const fatigue = document.getElementById('profileFatigue').value ? parseFloat(document.getElementById('profileFatigue').value) : null;
             
             try {
@@ -1567,7 +1784,17 @@
                     method: 'POST',
                     credentials: 'include',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, age, current_fatigue_level: fatigue })
+                    body: JSON.stringify({ 
+                        name, 
+                        age, 
+                        gender,
+                        ethnicity,
+                        cancer_type: cancerType,
+                        treatment_stage: treatmentStage,
+                        diagnosis_date: diagnosisDate,
+                        location,
+                        current_fatigue_level: fatigue 
+                    })
                 });
                 
                 if (response.ok) {

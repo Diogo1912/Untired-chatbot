@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Console - Untire Coach</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: #F5F0E6;
+            min-height: 100vh;
+        }
+
+        .admin-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .admin-header {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .admin-header h1 {
+            color: #FF7A2F;
+            font-size: 1.8rem;
+        }
+
+        .admin-nav {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            overflow-x: auto;
+        }
+
+        .nav-btn {
+            padding: 0.75rem 1.5rem;
+            background: white;
+            border: 2px solid #E7DED3;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            color: #5C5C5C;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .nav-btn:hover, .nav-btn.active {
+            background: #FF7A2F;
+            color: white;
+            border-color: #FF7A2F;
+        }
+
+        .admin-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: none;
+        }
+
+        .admin-section.active {
+            display: block;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            color: #2C2C2C;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid #E7DED3;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #2C2C2C;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #E7DED3;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+
+        .form-group textarea {
+            min-height: 200px;
+            resize: vertical;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #FF7A2F;
+        }
+
+        .form-description {
+            font-size: 0.875rem;
+            color: #5C5C5C;
+            margin-top: 0.25rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #FF7A2F;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #FF9A5B;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #5C5C5C;
+            border: 2px solid #E7DED3;
+        }
+
+        .btn-secondary:hover {
+            background: #FFE8D9;
+            border-color: #FF7A2F;
+        }
+
+        .btn-danger {
+            background: #D32F2F;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #B71C1C;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: auto;
+        }
+
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .tool-card {
+            padding: 1rem;
+            border: 2px solid #E7DED3;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .tool-card input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+        }
+
+        .users-list {
+            margin-top: 1.5rem;
+        }
+
+        .user-card {
+            padding: 1rem;
+            border: 2px solid #E7DED3;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-info h3 {
+            color: #2C2C2C;
+            margin-bottom: 0.25rem;
+        }
+
+        .user-info p {
+            color: #5C5C5C;
+            font-size: 0.875rem;
+        }
+
+        .user-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .badge-admin {
+            background: #FF7A2F;
+            color: white;
+        }
+
+        .range-group {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .range-group input[type="range"] {
+            flex: 1;
+        }
+
+        .range-value {
+            min-width: 50px;
+            text-align: center;
+            font-weight: 600;
+            color: #FF7A2F;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .alert-success {
+            background: #E8F5E9;
+            color: #2E7D32;
+            border: 1px solid #66BB6A;
+        }
+
+        .alert-error {
+            background: #FFE8D9;
+            color: #D32F2F;
+            border: 1px solid #FFB3A7;
+        }
+
+        .logout-btn {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: 2px solid #E7DED3;
+            border-radius: 6px;
+            cursor: pointer;
+            color: #5C5C5C;
+            font-size: 0.9rem;
+        }
+
+        .logout-btn:hover {
+            background: #FFE8D9;
+            border-color: #FF7A2F;
+        }
+
+        .field-editor {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .field-editor input {
+            flex: 1;
+        }
+
+        .btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            padding: 1.5rem;
+            background: #FFE8D9;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #FF7A2F;
+        }
+
+        .stat-label {
+            color: #5C5C5C;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>🛠️ Admin Console</h1>
+            <button class="logout-btn" onclick="handleLogout()">Logout</button>
+        </div>
+
+        <div class="admin-nav">
+            <button class="nav-btn active" onclick="showSection('ai-settings')">AI Settings</button>
+            <button class="nav-btn" onclick="showSection('users')">User Management</button>
+            <button class="nav-btn" onclick="showSection('content')">Content Management</button>
+            <button class="nav-btn" onclick="showSection('stats')">Statistics</button>
+        </div>
+
+        <div id="ai-settings" class="admin-section active">
+            <h2 class="section-title">AI Configuration</h2>
+            
+            <div id="aiAlert"></div>
+
+            <form id="aiSettingsForm">
+                <div class="form-group">
+                    <label for="systemPrompt">System Prompt</label>
+                    <textarea id="systemPrompt" placeholder="Enter the system prompt for the AI..."></textarea>
+                    <div class="form-description">This is the core instruction that guides the AI's behavior. Changes will affect all conversations.</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="model">AI Model</label>
+                    <select id="model">
+                        <option value="gpt-4o">GPT-4o (Recommended)</option>
+                        <option value="gpt-4o-mini">GPT-4o Mini (Faster, cheaper)</option>
+                        <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Budget)</option>
+                    </select>
+                    <div class="form-description">Select the OpenAI model to use for conversations.</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="temperature">Temperature: <span id="tempValue" class="range-value">0.8</span></label>
+                    <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.8" oninput="updateRangeValue('temperature', 'tempValue')">
+                    <div class="form-description">Controls randomness. Lower = more focused, Higher = more creative (0.0 - 2.0)</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="maxTokens">Max Tokens: <span id="tokensValue" class="range-value">500</span></label>
+                    <input type="range" id="maxTokens" min="100" max="2000" step="50" value="500" oninput="updateRangeValue('maxTokens', 'tokensValue')">
+                    <div class="form-description">Maximum length of AI responses (100 - 2000)</div>
+                </div>
+
+                <div class="form-group">
+                    <label>Verbosity Level</label>
+                    <select id="verbosity">
+                        <option value="low">Low (Brief responses)</option>
+                        <option value="medium" selected>Medium (Balanced)</option>
+                        <option value="high">High (Detailed responses)</option>
+                    </select>
+                    <div class="form-description">Controls how detailed the AI's responses should be.</div>
+                </div>
+
+                <div class="form-group">
+                    <label>Enabled Tools</label>
+                    <div class="tools-grid">
+                        <div class="tool-card">
+                            <input type="checkbox" id="tool-videos" value="videos" checked>
+                            <label for="tool-videos">Meditation Videos</label>
+                        </div>
+                        <div class="tool-card">
+                            <input type="checkbox" id="tool-breathing" value="breathing" checked>
+                            <label for="tool-breathing">Breathing Exercises</label>
+                        </div>
+                        <div class="tool-card">
+                            <input type="checkbox" id="tool-quiz" value="quiz" checked>
+                            <label for="tool-quiz">Fatigue Quiz</label>
+                        </div>
+                        <div class="tool-card">
+                            <input type="checkbox" id="tool-journaling" value="journaling" checked>
+                            <label for="tool-journaling">Journaling Prompts</label>
+                        </div>
+                        <div class="tool-card">
+                            <input type="checkbox" id="tool-activity" value="activity_tracking" checked>
+                            <label for="tool-activity">Activity Tracking</label>
+                        </div>
+                        <div class="tool-card">
+                            <input type="checkbox" id="tool-mood" value="mood_tracking" checked>
+                            <label for="tool-mood">Mood Tracking</label>
+                        </div>
+                    </div>
+                    <div class="form-description">Select which tools the AI can use to help users.</div>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="memoryEnabled" checked> Enable Memory System
+                    </label>
+                    <div class="form-description">Allow AI to remember and reference past conversations.</div>
+                </div>
+
+                <div class="form-group">
+                    <label>Accessible User Information Fields</label>
+                    <div id="userFieldsList" class="checkbox-group">
+                        <!-- Dynamically populated -->
+                    </div>
+                    <div class="form-description">Select which user profile fields the AI can access.</div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Save AI Settings</button>
+            </form>
+        </div>
+
+        <div id="users" class="admin-section">
+            <h2 class="section-title">User Management</h2>
+            
+            <div id="userAlert"></div>
+
+            <div style="margin-bottom: 2rem;">
+                <h3 style="color: #2C2C2C; margin-bottom: 1rem;">Create New User</h3>
+                <form id="createUserForm" style="display: flex; gap: 1rem; align-items: flex-end;">
+                    <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                        <label for="newUsername">Username</label>
+                        <input type="text" id="newUsername" placeholder="Enter username" required>
+                    </div>
+                    <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                        <label for="newPassword">Password</label>
+                        <input type="password" id="newPassword" placeholder="Enter password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Create User</button>
+                </form>
+            </div>
+
+            <div class="users-list">
+                <h3 style="color: #2C2C2C; margin-bottom: 1rem;">All Users</h3>
+                <div id="usersList">
+                    <!-- Users populated here -->
+                </div>
+            </div>
+        </div>
+
+        <div id="content" class="admin-section">
+            <h2 class="section-title">Content Management</h2>
+            
+            <div id="contentAlert"></div>
+
+            <div style="margin-bottom: 2rem;">
+                <h3 style="color: #2C2C2C; margin-bottom: 1rem;">Add Meditation Video</h3>
+                <form id="addVideoForm">
+                    <div class="form-group">
+                        <label for="videoTitle">Video Title</label>
+                        <input type="text" id="videoTitle" placeholder="e.g., 10 Minute Guided Meditation" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="videoUrl">YouTube URL</label>
+                        <input type="url" id="videoUrl" placeholder="https://www.youtube.com/watch?v=..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="videoCategory">Category</label>
+                        <select id="videoCategory">
+                            <option value="meditation">Meditation</option>
+                            <option value="relaxation">Relaxation</option>
+                            <option value="sleep">Sleep</option>
+                            <option value="energy">Energy</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Video</button>
+                </form>
+            </div>
+
+            <div>
+                <h3 style="color: #2C2C2C; margin-bottom: 1rem;">Add Breathing Exercise</h3>
+                <form id="addBreathingForm">
+                    <div class="form-group">
+                        <label for="breathingTitle">Exercise Title</label>
+                        <input type="text" id="breathingTitle" placeholder="e.g., Box Breathing" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="breathingPattern">Pattern</label>
+                        <input type="text" id="breathingPattern" placeholder="e.g., Inhale 4s, Hold 4s, Exhale 4s, Hold 4s" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="breathingDuration">Duration (seconds)</label>
+                        <input type="number" id="breathingDuration" placeholder="60" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Exercise</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="stats" class="admin-section">
+            <h2 class="section-title">Statistics</h2>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalUsers">0</div>
+                    <div class="stat-label">Total Users</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalChats">0</div>
+                    <div class="stat-label">Total Conversations</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalMessages">0</div>
+                    <div class="stat-label">Total Messages</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalVideos">0</div>
+                    <div class="stat-label">Videos Available</div>
+                </div>
+            </div>
+
+            <div style="background: #FFE8D9; padding: 1.5rem; border-radius: 8px;">
+                <h3 style="color: #2C2C2C; margin-bottom: 0.5rem;">System Health</h3>
+                <p style="color: #5C5C5C;">Database: <span style="color: #2E7D32; font-weight: 600;">Connected ✓</span></p>
+                <p style="color: #5C5C5C;">OpenAI API: <span id="apiStatus" style="font-weight: 600;">Checking...</span></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSection = 'ai-settings';
+        let aiSettings = null;
+        let allUsers = [];
+
+        // Available user fields
+        const userFields = [
+            { id: 'name', label: 'Name' },
+            { id: 'age', label: 'Age' },
+            { id: 'gender', label: 'Gender' },
+            { id: 'ethnicity', label: 'Ethnicity' },
+            { id: 'cancer_type', label: 'Cancer Type' },
+            { id: 'treatment_stage', label: 'Treatment Stage' },
+            { id: 'diagnosis_date', label: 'Diagnosis Date' },
+            { id: 'fatigue_level', label: 'Fatigue Level' },
+            { id: 'location', label: 'Location' },
+            { id: 'support_system', label: 'Support System' },
+            { id: 'medical_team', label: 'Medical Team' }
+        ];
+
+        // Check authentication
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/auth/me', {
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    window.location.href = '/';
+                    return false;
+                }
+                
+                const data = await response.json();
+                if (!data.user.isAdmin) {
+                    alert('Access denied. Admin privileges required.');
+                    window.location.href = '/';
+                    return false;
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Auth check error:', error);
+                window.location.href = '/';
+                return false;
+            }
+        }
+
+        // Show section
+        function showSection(sectionId) {
+            // Update nav buttons
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Update sections
+            document.querySelectorAll('.admin-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            document.getElementById(sectionId).classList.add('active');
+
+            currentSection = sectionId;
+
+            // Load section data
+            if (sectionId === 'ai-settings') {
+                loadAISettings();
+            } else if (sectionId === 'users') {
+                loadUsers();
+            } else if (sectionId === 'stats') {
+                loadStats();
+            }
+        }
+
+        // Update range value display
+        function updateRangeValue(rangeId, displayId) {
+            const value = document.getElementById(rangeId).value;
+            document.getElementById(displayId).textContent = value;
+        }
+
+        // Load AI settings
+        async function loadAISettings() {
+            try {
+                const response = await fetch('/api/admin/ai-settings', {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    aiSettings = await response.json();
+                    
+                    // Populate form
+                    document.getElementById('systemPrompt').value = aiSettings.system_prompt || '';
+                    document.getElementById('model').value = aiSettings.model || 'gpt-4o';
+                    document.getElementById('temperature').value = aiSettings.temperature || 0.8;
+                    document.getElementById('tempValue').textContent = aiSettings.temperature || 0.8;
+                    document.getElementById('maxTokens').value = aiSettings.max_tokens || 500;
+                    document.getElementById('tokensValue').textContent = aiSettings.max_tokens || 500;
+                    document.getElementById('verbosity').value = aiSettings.verbosity || 'medium';
+                    document.getElementById('memoryEnabled').checked = aiSettings.memory_enabled !== false;
+
+                    // Populate enabled tools
+                    const enabledTools = aiSettings.enabled_tools || [];
+                    document.querySelectorAll('.tool-card input[type="checkbox"]').forEach(checkbox => {
+                        checkbox.checked = enabledTools.includes(checkbox.value);
+                    });
+
+                    // Populate user fields
+                    const accessibleFields = aiSettings.accessible_user_fields || [];
+                    const fieldsList = document.getElementById('userFieldsList');
+                    fieldsList.innerHTML = '';
+                    userFields.forEach(field => {
+                        const div = document.createElement('div');
+                        div.className = 'checkbox-item';
+                        div.innerHTML = `
+                            <input type="checkbox" id="field-${field.id}" value="${field.id}" ${accessibleFields.includes(field.id) ? 'checked' : ''}>
+                            <label for="field-${field.id}">${field.label}</label>
+                        `;
+                        fieldsList.appendChild(div);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load AI settings:', error);
+                showAlert('aiAlert', 'Failed to load AI settings', 'error');
+            }
+        }
+
+        // Save AI settings
+        document.getElementById('aiSettingsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const enabledTools = Array.from(document.querySelectorAll('.tool-card input[type="checkbox"]:checked'))
+                .map(cb => cb.value);
+
+            const accessibleFields = Array.from(document.querySelectorAll('#userFieldsList input[type="checkbox"]:checked'))
+                .map(cb => cb.value);
+
+            const settings = {
+                system_prompt: document.getElementById('systemPrompt').value,
+                model: document.getElementById('model').value,
+                temperature: parseFloat(document.getElementById('temperature').value),
+                max_tokens: parseInt(document.getElementById('maxTokens').value),
+                verbosity: document.getElementById('verbosity').value,
+                enabled_tools: enabledTools,
+                memory_enabled: document.getElementById('memoryEnabled').checked,
+                accessible_user_fields: accessibleFields
+            };
+
+            try {
+                const response = await fetch('/api/admin/ai-settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(settings)
+                });
+
+                if (response.ok) {
+                    showAlert('aiAlert', 'AI settings saved successfully!', 'success');
+                } else {
+                    throw new Error('Failed to save settings');
+                }
+            } catch (error) {
+                console.error('Save error:', error);
+                showAlert('aiAlert', 'Failed to save AI settings', 'error');
+            }
+        });
+
+        // Load users
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/admin/users', {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    allUsers = data.users || [];
+                    
+                    const usersList = document.getElementById('usersList');
+                    usersList.innerHTML = '';
+                    
+                    allUsers.forEach(user => {
+                        const card = document.createElement('div');
+                        card.className = 'user-card';
+                        card.innerHTML = `
+                            <div class="user-info">
+                                <h3>
+                                    ${user.username}
+                                    ${user.is_admin ? '<span class="badge badge-admin">ADMIN</span>' : ''}
+                                </h3>
+                                <p>Created: ${new Date(user.created_at).toLocaleDateString()}</p>
+                            </div>
+                            <div class="user-actions">
+                                ${!user.is_admin ? `<button class="btn btn-danger btn-small" onclick="deleteUser('${user._id}')">Delete</button>` : ''}
+                            </div>
+                        `;
+                        usersList.appendChild(card);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load users:', error);
+                showAlert('userAlert', 'Failed to load users', 'error');
+            }
+        }
+
+        // Create user
+        document.getElementById('createUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const username = document.getElementById('newUsername').value.trim();
+            const password = document.getElementById('newPassword').value;
+
+            try {
+                const response = await fetch('/api/admin/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (response.ok) {
+                    showAlert('userAlert', `User "${username}" created successfully!`, 'success');
+                    document.getElementById('createUserForm').reset();
+                    loadUsers();
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to create user');
+                }
+            } catch (error) {
+                console.error('Create user error:', error);
+                showAlert('userAlert', error.message, 'error');
+            }
+        });
+
+        // Delete user
+        async function deleteUser(userId) {
+            if (!confirm('Are you sure you want to delete this user? This will delete all their data permanently.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/users/${userId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    showAlert('userAlert', 'User deleted successfully', 'success');
+                    loadUsers();
+                } else {
+                    throw new Error('Failed to delete user');
+                }
+            } catch (error) {
+                console.error('Delete user error:', error);
+                showAlert('userAlert', 'Failed to delete user', 'error');
+            }
+        }
+
+        // Add video
+        document.getElementById('addVideoForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const title = document.getElementById('videoTitle').value;
+            const url = document.getElementById('videoUrl').value;
+            const category = document.getElementById('videoCategory').value;
+
+            // Extract video ID and create embed URL
+            let videoId = '';
+            if (url.includes('youtu.be/')) {
+                videoId = url.split('youtu.be/')[1].split('?')[0];
+            } else if (url.includes('youtube.com/watch?v=')) {
+                videoId = url.split('v=')[1].split('&')[0];
+            }
+
+            const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+
+            try {
+                const response = await fetch('/api/videos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ title, url, embed_url: embedUrl, category })
+                });
+
+                if (response.ok) {
+                    showAlert('contentAlert', 'Video added successfully!', 'success');
+                    document.getElementById('addVideoForm').reset();
+                } else {
+                    throw new Error('Failed to add video');
+                }
+            } catch (error) {
+                console.error('Add video error:', error);
+                showAlert('contentAlert', 'Failed to add video', 'error');
+            }
+        });
+
+        // Add breathing exercise
+        document.getElementById('addBreathingForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const title = document.getElementById('breathingTitle').value;
+            const pattern = document.getElementById('breathingPattern').value;
+            const duration = parseInt(document.getElementById('breathingDuration').value);
+
+            try {
+                const response = await fetch('/api/breathing-exercises', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ 
+                        title, 
+                        pattern, 
+                        duration,
+                        description: title,
+                        embed_code: ''
+                    })
+                });
+
+                if (response.ok) {
+                    showAlert('contentAlert', 'Breathing exercise added successfully!', 'success');
+                    document.getElementById('addBreathingForm').reset();
+                } else {
+                    throw new Error('Failed to add breathing exercise');
+                }
+            } catch (error) {
+                console.error('Add breathing error:', error);
+                showAlert('contentAlert', 'Failed to add breathing exercise', 'error');
+            }
+        });
+
+        // Load statistics
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/admin/stats', {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const stats = await response.json();
+                    document.getElementById('totalUsers').textContent = stats.totalUsers || 0;
+                    document.getElementById('totalChats').textContent = stats.totalChats || 0;
+                    document.getElementById('totalMessages').textContent = stats.totalMessages || 0;
+                    document.getElementById('totalVideos').textContent = stats.totalVideos || 0;
+                    
+                    // Check API status
+                    const apiStatus = document.getElementById('apiStatus');
+                    if (stats.openaiConnected) {
+                        apiStatus.innerHTML = '<span style="color: #2E7D32;">Connected ✓</span>';
+                    } else {
+                        apiStatus.innerHTML = '<span style="color: #D32F2F;">Not configured ✗</span>';
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        // Show alert
+        function showAlert(elementId, message, type) {
+            const alert = document.getElementById(elementId);
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            alert.style.display = 'block';
+            
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
+        }
+
+        // Logout
+        async function handleLogout() {
+            try {
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+            window.location.href = '/';
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            const authenticated = await checkAuth();
+            if (authenticated) {
+                loadAISettings();
+            }
+        });
+    </script>
+</body>
+</html>
+
