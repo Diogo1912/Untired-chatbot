@@ -7,30 +7,66 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/untire
 let client = null;
 let db = null;
 
-// Initialize MongoDB connection
+// Initialize MongoDB connection with retry logic
 async function initializeDatabase() {
-  try {
-    client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    db = client.db();
-    
-    // Create indexes
-    await db.collection('users').createIndex({ username: 1 }, { unique: true, sparse: true });
-    await db.collection('sessions').createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
-    await db.collection('profiles').createIndex({ user_id: 1 }, { unique: true });
-    await db.collection('chats').createIndex({ user_id: 1 });
-    await db.collection('messages').createIndex({ chat_id: 1 });
-    await db.collection('user_settings').createIndex({ user_id: 1 }, { unique: true });
-    await db.collection('ai_settings').createIndex({ key: 1 }, { unique: true });
-    await db.collection('saved_memories').createIndex({ user_id: 1 });
-    
-    // Auto-create default admin account if none exists
-    await createDefaultAdminIfNeeded();
-    
-    console.log('✅ MongoDB connected successfully');
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    throw error;
+  const maxRetries = 5;
+  let retryCount = 0;
+  
+  while (retryCount < maxRetries) {
+    try {
+      console.log(`🔄 Attempting MongoDB connection (attempt ${retryCount + 1}/${maxRetries})...`);
+      
+      if (!MONGODB_URI) {
+        console.error('❌ MONGODB_URI environment variable is not set!');
+        console.log('💡 Please set MONGODB_URI in your environment variables');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        retryCount++;
+        continue;
+      }
+      
+      client = new MongoClient(MONGODB_URI, {
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+      });
+      
+      await client.connect();
+      db = client.db();
+      
+      // Create indexes
+      await db.collection('users').createIndex({ username: 1 }, { unique: true, sparse: true });
+      await db.collection('sessions').createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
+      await db.collection('profiles').createIndex({ user_id: 1 }, { unique: true });
+      await db.collection('chats').createIndex({ user_id: 1 });
+      await db.collection('messages').createIndex({ chat_id: 1 });
+      await db.collection('user_settings').createIndex({ user_id: 1 }, { unique: true });
+      await db.collection('ai_settings').createIndex({ key: 1 }, { unique: true });
+      await db.collection('saved_memories').createIndex({ user_id: 1 });
+      
+      // Auto-create default admin account if none exists
+      await createDefaultAdminIfNeeded();
+      
+      console.log('✅ MongoDB connected successfully');
+      return; // Success, exit the retry loop
+      
+    } catch (error) {
+      retryCount++;
+      console.error(`❌ MongoDB connection error (attempt ${retryCount}/${maxRetries}):`, error.message);
+      
+      if (retryCount >= maxRetries) {
+        console.error('❌ Failed to connect to MongoDB after multiple attempts');
+        console.error('⚠️  Server will start but database features will be unavailable');
+        console.error('💡 Please check:');
+        console.error('   1. MONGODB_URI environment variable is set correctly');
+        console.error('   2. MongoDB service is running and accessible');
+        console.error('   3. Network connection is stable');
+        return; // Don't throw - let server start anyway
+      }
+      
+      // Wait before retrying (exponential backoff)
+      const waitTime = Math.min(1000 * Math.pow(2, retryCount), 10000);
+      console.log(`⏳ Waiting ${waitTime/1000}s before retry...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
   }
 }
 
@@ -478,10 +514,14 @@ async function closeDatabase() {
   }
 }
 
-// Initialize on load
-initializeDatabase().catch(console.error);
+// Initialize on load - don't crash if it fails
+initializeDatabase().catch(error => {
+  console.error('Database initialization failed:', error.message);
+  console.log('⚠️  Server will continue but database features may be limited');
+});
 
 module.exports = {
+  db, // Export db object for health checks
   initializeDatabase,
   closeDatabase,
   getOrCreateUser,

@@ -104,13 +104,40 @@ function hashPassword(password) {
 }
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    timestamp: new Date().toISOString(),
-    version: '2.0.0',
-    database: 'MongoDB'
-  });
+app.get('/api/health', async (req, res) => {
+  try {
+    // Test database connection
+    const { db } = require('./database-mongo');
+    let dbStatus = 'disconnected';
+    
+    if (db) {
+      try {
+        await db.admin().ping();
+        dbStatus = 'connected';
+      } catch (e) {
+        dbStatus = 'error: ' + e.message;
+      }
+    }
+    
+    res.json({ 
+      status: 'healthy', 
+      timestamp: new Date().toISOString(),
+      version: '2.0.0',
+      database: 'MongoDB',
+      databaseStatus: dbStatus,
+      env: {
+        nodeEnv: process.env.NODE_ENV,
+        hasOpenAI: !!process.env.OPENAI_API_KEY,
+        hasMongoDB: !!process.env.MONGODB_URI
+      }
+    });
+  } catch (error) {
+    res.json({
+      status: 'degraded',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // Authentication endpoints
@@ -987,12 +1014,51 @@ app.get('/admin.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
+// Global error handlers
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit - log and continue
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  // Don't exit immediately - give time to log
+  setTimeout(() => {
+    console.error('🔄 Server will attempt to continue...');
+  }, 1000);
+});
+
 // Start server
-app.listen(PORT, () => {
-  console.log(`🌿 Untire Coach server running on port ${PORT}`);
-  console.log(`🌐 Frontend: http://localhost:${PORT}`);
-  console.log(`🔧 Admin Console: http://localhost:${PORT}/admin.html`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log('\n🌿 ========================================');
+  console.log('🌿 Untire Coach Server Started');
+  console.log('🌿 ========================================');
+  console.log(`📍 Port: ${PORT}`);
+  console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔧 Admin Console: /admin.html`);
   console.log(`🗄️  Database: MongoDB`);
-  console.log(`🔑 OpenAI API: ${process.env.OPENAI_API_KEY ? 'Configured' : 'Not configured (using demo responses)'}`);
+  console.log(`🔑 OpenAI API: ${process.env.OPENAI_API_KEY ? '✅ Configured' : '⚠️  Not configured (demo mode)'}`);
+  console.log(`📊 MongoDB URI: ${process.env.MONGODB_URI ? '✅ Set' : '❌ Not set'}`);
+  console.log('🌿 ========================================\n');
+  
+  if (!process.env.MONGODB_URI) {
+    console.error('⚠️  WARNING: MONGODB_URI is not set!');
+    console.error('💡 Add MongoDB service in Railway and set MONGODB_URI variable');
+    console.error('   Server is running but database features will not work\n');
+  }
+  
+  if (!process.env.OPENAI_API_KEY) {
+    console.warn('⚠️  WARNING: OPENAI_API_KEY is not set!');
+    console.warn('💡 AI features will use demo responses\n');
+  }
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('🛑 SIGTERM signal received: closing HTTP server');
+  server.close(() => {
+    console.log('✅ HTTP server closed');
+    process.exit(0);
+  });
 });
 
