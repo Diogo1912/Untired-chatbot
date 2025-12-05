@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ['nodejs-18_x']
+nixPkgs = ['nodejs-20_x']
 
 [phases.install]
 cmds = ['npm ci']
@@ -8,5 +8,5 @@ cmds = ['npm ci']
 cmds = ['echo "Build phase complete"']
 
 [start]
-cmd = 'node server.js'
+cmd = 'node server-mongo.js'
 
