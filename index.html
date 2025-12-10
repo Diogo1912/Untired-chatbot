@@ -1839,44 +1839,79 @@
         // Breathing Exercise Functions
         let breathingTimers = {};
 
-        function startBreathingExercise(id, duration, pattern) {
-            const timerEl = document.getElementById(`breathing-timer-${id}`);
-            const controlsEl = document.getElementById(`breathing-controls-${id}`);
-            const startBtn = controlsEl.querySelector('.breathing-btn');
-            const stopBtn = startBtn.nextElementSibling;
+        function startBreathingExercise(exerciseId, totalDuration, pattern, title) {
+            const timerEl = document.getElementById(`breathing-timer-${exerciseId}`);
+            const circleEl = document.getElementById(`breathing-circle-${exerciseId}`);
+            const startBtn = document.getElementById(`breathing-start-${exerciseId}`);
+            const stopBtn = document.getElementById(`breathing-stop-${exerciseId}`);
+            const instructionEl = document.getElementById(`breathing-instruction-${exerciseId}`);
             
-            if (breathingTimers[id]) {
-                clearInterval(breathingTimers[id]);
-            }
+            if (!timerEl || !circleEl) return;
             
-            let remaining = duration;
-            timerEl.textContent = `${remaining}s`;
             startBtn.style.display = 'none';
-            stopBtn.style.display = 'block';
+            stopBtn.style.display = 'inline-block';
+            instructionEl.style.opacity = '1';
             
-            breathingTimers[id] = setInterval(() => {
-                remaining--;
-                timerEl.textContent = `${remaining}s`;
+            // Parse pattern (e.g., "Inhale 4s, Hold 4s, Exhale 4s")
+            const phases = pattern.split(',').map(p => p.trim());
+            let currentPhase = 0;
+            let timeLeft = totalDuration;
+            
+            const cyclePhases = () => {
+                const phase = phases[currentPhase % phases.length];
+                instructionEl.textContent = phase;
                 
-                if (remaining <= 0) {
-                    stopBreathingExercise(id);
+                // Animate circle based on phase
+                if (phase.toLowerCase().includes('inhale')) {
+                    circleEl.style.transform = 'scale(1.5)';
+                    circleEl.style.background = 'rgba(255,255,255,0.5)';
+                } else if (phase.toLowerCase().includes('exhale')) {
+                    circleEl.style.transform = 'scale(0.8)';
+                    circleEl.style.background = 'rgba(255,255,255,0.2)';
+                } else {
+                    circleEl.style.transform = 'scale(1.2)';
+                    circleEl.style.background = 'rgba(255,255,255,0.35)';
                 }
-            }, 1000);
+                
+                currentPhase++;
+            };
+            
+            cyclePhases();
+            const phaseInterval = setInterval(cyclePhases, 4000); // Change phase every 4s
+            
+            breathingTimers[exerciseId] = {
+                interval: setInterval(() => {
+                    timeLeft--;
+                    timerEl.textContent = timeLeft + 's';
+                    if (timeLeft <= 0) {
+                        stopBreathingExercise(exerciseId);
+                        instructionEl.textContent = '✓ Exercise Complete! Well done.';
+                        setTimeout(() => {
+                            instructionEl.style.opacity = '0';
+                            timerEl.textContent = totalDuration + 's';
+                        }, 3000);
+                    }
+                }, 1000),
+                phaseInterval
+            };
         }
 
-        function stopBreathingExercise(id) {
-            if (breathingTimers[id]) {
-                clearInterval(breathingTimers[id]);
-                delete breathingTimers[id];
+        function stopBreathingExercise(exerciseId) {
+            if (breathingTimers[exerciseId]) {
+                clearInterval(breathingTimers[exerciseId].interval);
+                clearInterval(breathingTimers[exerciseId].phaseInterval);
+                delete breathingTimers[exerciseId];
             }
             
-            const timerEl = document.getElementById(`breathing-timer-${id}`);
-            const controlsEl = document.getElementById(`breathing-controls-${id}`);
-            const startBtn = controlsEl.querySelector('.breathing-btn');
-            const stopBtn = startBtn.nextElementSibling;
+            const startBtn = document.getElementById(`breathing-start-${exerciseId}`);
+            const stopBtn = document.getElementById(`breathing-stop-${exerciseId}`);
+            const circleEl = document.getElementById(`breathing-circle-${exerciseId}`);
+            const instructionEl = document.getElementById(`breathing-instruction-${exerciseId}`);
             
-            startBtn.style.display = 'block';
-            stopBtn.style.display = 'none';
+            if (startBtn) startBtn.style.display = 'inline-block';
+            if (stopBtn) stopBtn.style.display = 'none';
+            if (circleEl) circleEl.style.transform = 'scale(1)';
+            if (instructionEl) instructionEl.style.opacity = '0';
         }
 
         // Show profile modal
@@ -1888,9 +1923,7 @@
         // Skip profile creation
         function skipProfile() {
             profileModal.style.display = 'none';
-            if (isConnected && !currentChatId) {
-                showWelcomeMessage();
-            }
+            // No welcome message - user starts naturally
         }
 
         // Save profile
@@ -1930,10 +1963,7 @@
                     userProfile = data.profile;
                     updateProfileDisplay();
                     profileModal.style.display = 'none';
-                    
-                    if (isConnected && !currentChatId) {
-                        showWelcomeMessage();
-                    }
+                    // No welcome message - user starts naturally
                 }
             } catch (error) {
                 console.error('Profile save error:', error);
@@ -1988,10 +2018,7 @@
                 }
             }
             
-            // Show welcome message after fatigue rating
-            if (isConnected) {
-                showWelcomeMessage();
-            }
+            // No welcome message - user starts naturally
         }
         
         // Check if fatigue should be asked
@@ -2021,9 +2048,7 @@
             
             if (connected) {
                 connectionLoader.style.display = 'none';
-                if (!currentChatId) {
-                    showWelcomeMessage();
-                }
+                // No welcome message - user starts naturally
             }
         }
 
@@ -2128,14 +2153,33 @@
                     if (video && video.embedUrl) {
                         const videoContainer = document.createElement('div');
                         videoContainer.className = 'video-widget';
+                        videoContainer.style.cssText = `
+                            background: linear-gradient(135deg, #fff 0%, #F5F0E6 100%);
+                            border-radius: 16px;
+                            padding: 20px;
+                            margin: 15px 0;
+                            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                            border: 2px solid #E7DED3;
+                        `;
                         videoContainer.innerHTML = `
-                            <div class="video-title">${video.title || 'Video'}</div>
-                            <iframe 
-                                src="${video.embedUrl}" 
-                                frameborder="0" 
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                                allowfullscreen>
-                            </iframe>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                                <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #FF7A2F, #E66A1F); display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">
+                                    ▶
+                                </div>
+                                <div>
+                                    <div style="font-weight: 600; color: #2C2C2C; font-size: 16px;">${video.title || 'Meditation Video'}</div>
+                                    <div style="font-size: 13px; color: #888;">Suggested for you</div>
+                                </div>
+                            </div>
+                            <div style="position: relative; padding-bottom: 56.25%; height: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                                <iframe 
+                                    src="${video.embedUrl}" 
+                                    frameborder="0" 
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                    allowfullscreen
+                                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+                                </iframe>
+                            </div>
                         `;
                         contentDiv.appendChild(videoContainer);
                     }
@@ -2145,20 +2189,42 @@
             // Add breathing exercise widgets if provided
             if (breathing && breathing.length > 0) {
                 breathing.forEach(exercise => {
-                    const exerciseId = Date.now() + Math.random();
+                    const exerciseId = 'breathing_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
                     const breathingContainer = document.createElement('div');
                     breathingContainer.className = 'breathing-widget';
+                    breathingContainer.style.cssText = `
+                        background: linear-gradient(135deg, #8FBC8F 0%, #7AAC7A 100%);
+                        border-radius: 16px;
+                        padding: 24px;
+                        margin: 15px 0;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                        color: white;
+                    `;
                     breathingContainer.innerHTML = `
-                        <div class="breathing-title">${exercise.title}</div>
-                        <div class="breathing-content">
-                            <div class="breathing-pattern">${exercise.pattern}</div>
-                            <div class="breathing-timer" id="breathing-timer-${exerciseId}">${exercise.duration}s</div>
-                            <div class="breathing-controls" id="breathing-controls-${exerciseId}">
-                                <button class="breathing-btn" onclick="startBreathingExercise(${exerciseId}, ${exercise.duration}, '${exercise.pattern.replace(/'/g, "\\'")}')">Start</button>
-                                <button class="breathing-btn" onclick="stopBreathingExercise(${exerciseId})" style="display:none;">Stop</button>
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                            <div style="width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; font-size: 24px;">
+                                🫁
                             </div>
-                            ${exercise.embedCode ? `<div style="margin-top:1rem;">${exercise.embedCode}</div>` : ''}
+                            <div>
+                                <div style="font-weight: 600; font-size: 18px;">${exercise.title}</div>
+                                <div style="font-size: 14px; opacity: 0.9;">${exercise.pattern}</div>
+                            </div>
                         </div>
+                        <div id="breathing-circle-${exerciseId}" style="width: 120px; height: 120px; border-radius: 50%; background: rgba(255,255,255,0.3); margin: 20px auto; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; transition: transform 4s ease-in-out; backdrop-filter: blur(10px);">
+                            <span id="breathing-timer-${exerciseId}">${exercise.duration}s</span>
+                        </div>
+                        <div style="text-align: center; margin-top: 16px;">
+                            <button id="breathing-start-${exerciseId}" onclick="startBreathingExercise('${exerciseId}', ${exercise.duration}, '${exercise.pattern.replace(/'/g, "\\'")}', '${exercise.title}')" 
+                                    style="background: white; color: #8FBC8F; border: none; padding: 12px 32px; border-radius: 24px; font-weight: 600; cursor: pointer; font-size: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: transform 0.2s;"
+                                    onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                                ▶ Start Exercise
+                            </button>
+                            <button id="breathing-stop-${exerciseId}" onclick="stopBreathingExercise('${exerciseId}')" 
+                                    style="background: rgba(255,255,255,0.3); color: white; border: 2px solid white; padding: 12px 32px; border-radius: 24px; font-weight: 600; cursor: pointer; font-size: 16px; display: none;">
+                                ⏸ Stop
+                            </button>
+                        </div>
+                        <div id="breathing-instruction-${exerciseId}" style="text-align: center; margin-top: 16px; font-size: 18px; font-weight: 500; min-height: 30px; opacity: 0;"></div>
                     `;
                     contentDiv.appendChild(breathingContainer);
                 });
@@ -2305,10 +2371,9 @@
             if (isConnected) {
                 const fatigueCheck = await shouldAskFatigue();
                 
-                if (fatigueCheck.shouldAsk) {
-                    // Ask for fatigue rating
-                    showFatigueModal();
-                } else if (fatigueCheck.reason === 'has_typical_fatigue') {
+                // DISABLED: Don't auto-prompt for fatigue
+                // Users can manually take the Fatigue Quiz button
+                if (fatigueCheck.reason === 'has_typical_fatigue') {
                     // Use profile's typical fatigue level
                     currentFatigueLevel = fatigueCheck.typicalFatigue;
                     
@@ -2328,8 +2393,7 @@
                         console.error('Failed to create chat:', error);
                     }
                     
-                    // Show welcome message
-                showWelcomeMessage();
+                    // Welcome message disabled - no predetermined messages
                 } else {
                     // Already asked today, use profile's typical fatigue or proceed without
                     if (userProfile?.current_fatigue_level !== null && userProfile?.current_fatigue_level !== undefined) {
@@ -2352,7 +2416,7 @@
                         console.error('Failed to create chat:', error);
                     }
                     
-                    showWelcomeMessage();
+                    // No welcome message
                 }
             }
             
