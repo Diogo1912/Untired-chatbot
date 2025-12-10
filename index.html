@@ -1425,56 +1425,9 @@
             }
         }
 
-        // Show profile view modal
-        async function showProfileView() {
-            try {
-                // Reload profile to get latest dynamic profile
-                const response = await fetch(`/api/profile/${userId}`, {
-                    credentials: 'include'
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    userProfile = data.profile;
-                    
-                    // Update basic info
-                    const basicInfo = document.getElementById('basicInfo');
-                    let basicHtml = '';
-                    if (userProfile?.name) basicHtml += `<strong>Name:</strong> ${userProfile.name}<br>`;
-                    if (userProfile?.age) basicHtml += `<strong>Age:</strong> ${userProfile.age}<br>`;
-                    if (userProfile?.gender) basicHtml += `<strong>Gender:</strong> ${userProfile.gender}<br>`;
-                    if (userProfile?.ethnicity) basicHtml += `<strong>Ethnicity:</strong> ${userProfile.ethnicity}<br>`;
-                    if (userProfile?.cancer_type) basicHtml += `<strong>Cancer Type:</strong> ${userProfile.cancer_type}<br>`;
-                    if (userProfile?.treatment_stage) basicHtml += `<strong>Treatment Stage:</strong> ${userProfile.treatment_stage.replace('-', ' ')}<br>`;
-                    if (userProfile?.diagnosis_date) basicHtml += `<strong>Diagnosis Date:</strong> ${new Date(userProfile.diagnosis_date).toLocaleDateString()}<br>`;
-                    if (userProfile?.location) basicHtml += `<strong>Location:</strong> ${userProfile.location}<br>`;
-                    if (userProfile?.current_fatigue_level !== null) {
-                        basicHtml += `<strong>Typical Fatigue Level:</strong> ${userProfile.current_fatigue_level}/10<br>`;
-                    }
-                    if (!basicHtml) basicHtml = 'No basic information set yet.';
-                    basicInfo.innerHTML = basicHtml;
-                    basicInfo.className = basicHtml === 'No basic information set yet.' ? 'profile-details empty' : 'profile-details';
-                    
-                    // Update dynamic profile
-                    const dynamicInfo = document.getElementById('dynamicProfileInfo');
-                    if (userProfile?.dynamic_profile && userProfile.dynamic_profile.trim()) {
-                        dynamicInfo.innerHTML = userProfile.dynamic_profile.replace(/\n/g, '<br>');
-                        dynamicInfo.className = 'profile-details';
-                    } else {
-                        dynamicInfo.innerHTML = 'I\'m still getting to know you. Keep chatting and I\'ll learn more about you!';
-                        dynamicInfo.className = 'profile-details empty';
-                    }
-                    
-                    // Load saved memories
-                    loadSavedMemories();
-                    
-                    profileViewModal.style.display = 'flex';
-                } else {
-                    alert('Failed to load profile');
-                }
-            } catch (error) {
-                console.error('Profile view error:', error);
-                alert('Failed to load profile');
-            }
+        // Show profile view - redirect to full page
+        function showProfileView() {
+            window.location.href = 'profile.html';
         }
 
         // Load saved memories
@@ -2432,10 +2385,10 @@
                 });
                 if (response.ok) {
                     const data = await response.json();
-            currentChatId = chatId;
+                    currentChatId = chatId;
                     currentFatigueLevel = data.chat.initial_fatigue_level;
-            
-            messages.innerHTML = '';
+                    
+                    messages.innerHTML = '';
                     chatTitle.textContent = data.chat.title || 'New Conversation';
                     
                     data.messages.forEach(msg => {
@@ -2452,7 +2405,7 @@
                     }
                     
                     await loadChatHistory();
-            messageInput.focus();
+                    messageInput.focus();
                 } else {
                     alert('Failed to load chat');
                 }
@@ -2496,7 +2449,12 @@
             chats.slice(0, 10).forEach(chat => {
                 const chatItem = document.createElement('div');
                 chatItem.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
-                chatItem.onclick = () => loadChat(chat.id);
+                chatItem.style.position = 'relative';
+                chatItem.style.paddingRight = '40px';
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.style.flex = '1';
+                contentDiv.onclick = () => loadChat(chat.id);
                 
                 const title = document.createElement('div');
                 title.className = 'chat-item-title';
@@ -2506,8 +2464,21 @@
                 preview.className = 'chat-item-preview';
                 preview.textContent = chat.initial_fatigue_level ? `Fatigue: ${chat.initial_fatigue_level}/10` : 'No messages yet';
                 
-                chatItem.appendChild(title);
-                chatItem.appendChild(preview);
+                const deleteBtn = document.createElement('button');
+                deleteBtn.innerHTML = '🗑️';
+                deleteBtn.style.cssText = 'position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 18px; padding: 4px 8px; opacity: 0.6; transition: opacity 0.2s;';
+                deleteBtn.onmouseover = () => deleteBtn.style.opacity = '1';
+                deleteBtn.onmouseout = () => deleteBtn.style.opacity = '0.6';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    deleteChat(chat.id);
+                };
+                deleteBtn.title = 'Delete chat';
+                
+                contentDiv.appendChild(title);
+                contentDiv.appendChild(preview);
+                chatItem.appendChild(contentDiv);
+                chatItem.appendChild(deleteBtn);
                 chatHistory.appendChild(chatItem);
             });
         }
@@ -2568,6 +2539,35 @@
         }
 
         // Clear all user info and reset to profile creation
+        // Delete a single chat
+        async function deleteChat(chatId) {
+            if (!confirm('Delete this conversation? This cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/chat/${chatId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    // If we deleted the current chat, start a new one
+                    if (chatId === currentChatId) {
+                        await startNewChat();
+                    }
+                    
+                    // Reload chat history
+                    await loadChatHistory();
+                } else {
+                    alert('Failed to delete chat');
+                }
+            } catch (error) {
+                console.error('Delete chat error:', error);
+                alert('Error deleting chat');
+            }
+        }
+
         async function clearAllInfo() {
             if (!confirm('Are you sure you want to delete all your information? This will permanently delete your profile, all conversations, and messages. This action cannot be undone.')) {
                 return;

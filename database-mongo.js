@@ -228,8 +228,8 @@ async function getUserChats(userId, limit = 10) {
 
 async function deleteChat(chatId) {
   await Promise.all([
-    db.collection('chats').deleteOne({ _id: chatId }),
-    db.collection('messages').deleteMany({ chat_id: chatId })
+    checkDB().collection('chats').deleteOne({ _id: chatId }),
+    checkDB().collection('messages').deleteMany({ chat_id: chatId })
   ]);
 }
 

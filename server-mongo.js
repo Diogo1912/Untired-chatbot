@@ -765,6 +765,28 @@ app.get('/api/chat/:chatId', authenticateUser, async (req, res) => {
   }
 });
 
+app.delete('/api/chat/:chatId', authenticateUser, async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const chat = await getChat(chatId);
+    
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+    
+    // Verify the chat belongs to the user
+    if (chat.user_id !== req.userId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    
+    await deleteChat(chatId);
+    res.json({ success: true, message: 'Chat deleted' });
+  } catch (error) {
+    console.error('Delete chat error:', error);
+    res.status(500).json({ error: 'Failed to delete chat' });
+  }
+});
+
 app.post('/api/chat', authenticateUser, async (req, res) => {
   try {
     const { chatId, message, initialFatigueLevel } = req.body;
