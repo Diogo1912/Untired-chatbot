@@ -69,7 +69,6 @@
             cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 12px;
             color: #5C5C5C;
             font-weight: 500;
             font-size: 15px;
@@ -85,12 +84,6 @@
             background: #FFF8F0;
             color: #FF7A2F;
             border-left-color: #FF7A2F;
-        }
-
-        .nav-icon {
-            font-size: 20px;
-            width: 24px;
-            text-align: center;
         }
 
         .content-area {
@@ -329,24 +322,20 @@
     <div class="settings-container">
         <div class="sidebar">
             <div class="sidebar-header">
-                <h1>⚙️ Settings</h1>
+                <h1>Settings</h1>
                 <a href="index.html" class="back-link">← Back to Chat</a>
             </div>
             <div class="sidebar-nav">
                 <div class="nav-item active" onclick="showSection('profile')">
-                    <span class="nav-icon">👤</span>
                     Profile
                 </div>
                 <div class="nav-item" onclick="showSection('preferences')">
-                    <span class="nav-icon">🎨</span>
                     Preferences
                 </div>
                 <div class="nav-item" onclick="showSection('notifications')">
-                    <span class="nav-icon">🔔</span>
                     Notifications
                 </div>
                 <div class="nav-item" onclick="showSection('privacy')">
-                    <span class="nav-icon">🔒</span>
                     Privacy
                 </div>
             </div>
@@ -453,7 +442,7 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="btn-primary">💾 Save Profile</button>
+                    <button type="submit" class="btn-primary">Save Profile</button>
                 </form>
             </div>
 
@@ -491,7 +480,7 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="btn-primary">💾 Save Preferences</button>
+                    <button type="submit" class="btn-primary">Save Preferences</button>
                 </form>
             </div>
 
@@ -519,7 +508,7 @@
                     <div class="card-title">Your Data</div>
                     <p style="color: #757575; margin-bottom: 16px;">All your conversations and profile information are stored securely.</p>
                     <button onclick="clearAllData()" style="background: #C62828; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 500;">
-                        🗑️ Clear All Data
+                        Clear All Data
                     </button>
                 </div>
             </div>
