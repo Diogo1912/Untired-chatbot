@@ -1395,7 +1395,7 @@
                         const today = new Date().toDateString();
                         
                         if (!lastAsked || lastAsked !== today) {
-                            showProfileModal();
+                        showProfileModal();
                             localStorage.setItem('lastProfileAsked', today);
                         }
                     }
@@ -1425,9 +1425,9 @@
             }
         }
 
-        // Show profile view - redirect to full page
+        // Show settings page - unified profile and settings
         function showProfileView() {
-            window.location.href = 'profile.html';
+            window.location.href = 'settings.html';
         }
 
         // Load saved memories
@@ -1466,7 +1466,7 @@
                         `;
                         grid.appendChild(card);
                     });
-                } else {
+                    } else {
                     throw new Error('Failed to load memories');
                 }
             } catch (error) {
@@ -1550,12 +1550,12 @@
 
         async function startFatigueQuiz() {
             quizQuestions = FATIGUE_QUIZ_QUESTIONS;
-            currentQuizQuestion = 0;
-            quizAnswers = [];
-            quizResult = null;
-            
-            fatigueQuizModal.style.display = 'flex';
-            displayQuizQuestion();
+                    currentQuizQuestion = 0;
+                    quizAnswers = [];
+                    quizResult = null;
+                    
+                    fatigueQuizModal.style.display = 'flex';
+                    displayQuizQuestion();
         }
 
         function displayQuizQuestion() {
@@ -1641,9 +1641,9 @@
                 quizAnswers[currentQuizQuestion] = input.value;
             } else if (question.type === 'textarea') {
                 quizAnswers[currentQuizQuestion] = input.value.trim();
-                if (!quizAnswers[currentQuizQuestion]) {
+            if (!quizAnswers[currentQuizQuestion]) {
                     alert('Please provide an answer');
-                    return;
+                return;
                 }
             } else if (question.type === 'radio') {
                 const selected = document.querySelector('input[name="quizInput"]:checked');
@@ -1667,6 +1667,12 @@
 
         async function calculateQuizResult() {
             try {
+                // Close modal first
+                fatigueQuizModal.style.display = 'none';
+                
+                // Start a new chat for the quiz results
+                await startNewChat();
+                
                 // Prepare summary of answers for AI
                 let summary = "I just completed a fatigue assessment. Here are my answers:\n\n";
                 quizQuestions.forEach((q, idx) => {
@@ -1680,16 +1686,22 @@
                 });
                 summary += "Based on these responses, please:\n1. Provide a suggested fatigue score (1-10)\n2. Give a brief assessment of my fatigue\n3. Suggest 2-3 personalized strategies that might help me";
                 
+                // Show quiz widget instead of raw message
+                addQuizResultsWidget(quizAnswers, quizQuestions);
+                showTyping();
+                
                 // Send to chat endpoint for AI assessment
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
                     body: JSON.stringify({
-                        chatId: currentChatId || null,
+                        chatId: currentChatId,
                         message: summary
                     })
                 });
+                
+                hideTyping();
                 
                 if (response.ok) {
                     const data = await response.json();
@@ -1698,9 +1710,7 @@
                     const scoreMatch = data.response.match(/(\d+)\/10/);
                     quizResult = scoreMatch ? parseInt(scoreMatch[1]) : 5;
                     
-                    // Close modal and show result in chat
-                    fatigueQuizModal.style.display = 'none';
-                    addMessage(summary, true);
+                    // Show AI assessment
                     addMessage(data.response, false);
                     
                     // Update fatigue level if extracted
@@ -1708,13 +1718,90 @@
                         await updateFatigueLevel(quizResult);
                     }
                     
-                    alert('✅ Fatigue assessment complete! Check the chat for your personalized results.');
+                    // Update chat history
+                    await loadChatHistory();
                 } else {
-                    alert('Failed to get assessment');
+                    addMessage('Sorry, I had trouble processing your quiz results. Please try again.', false);
                 }
             } catch (error) {
                 console.error('Quiz calculation error:', error);
-                alert('Error getting assessment');
+                hideTyping();
+                addMessage('There was an error processing your quiz. Please try again.', false);
+            }
+        }
+        
+        function addQuizResultsWidget(answers, questions) {
+            const widgetId = 'quiz_' + Date.now();
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message user';
+            
+            const avatar = document.createElement('div');
+            avatar.className = 'avatar user';
+            avatar.textContent = 'U';
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            const widget = document.createElement('div');
+            widget.style.cssText = `
+                background: linear-gradient(135deg, #FF7A2F 0%, #E66A1F 100%);
+                border-radius: 16px;
+                padding: 20px;
+                margin: 10px 0;
+                color: white;
+                box-shadow: 0 4px 12px rgba(255, 122, 47, 0.3);
+            `;
+            
+            widget.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                    <div style="width: 48px; height: 48px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 24px;">
+                        📋
+                    </div>
+                    <div>
+                        <div style="font-weight: 600; font-size: 18px;">Fatigue Quiz Completed</div>
+                        <div style="font-size: 14px; opacity: 0.9;">${questions.length} questions answered</div>
+                    </div>
+                </div>
+                <div id="quiz-details-${widgetId}" style="display: none; background: rgba(255,255,255,0.15); border-radius: 12px; padding: 16px; margin-top: 16px; max-height: 300px; overflow-y: auto;">
+                    ${questions.map((q, idx) => `
+                        <div style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.2);">
+                            <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px;">${q.question}</div>
+                            <div style="opacity: 0.9; font-size: 14px;">
+                                ${Array.isArray(answers[idx]) ? answers[idx].join(', ') : answers[idx]}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <button id="quiz-toggle-${widgetId}" onclick="toggleQuizDetails('${widgetId}')" 
+                        style="background: rgba(255,255,255,0.2); color: white; border: 2px solid white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; width: 100%; margin-top: 12px; transition: background 0.2s;"
+                        onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                    📊 View Your Answers
+                </button>
+            `;
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = new Date().toLocaleTimeString();
+            
+            contentDiv.appendChild(widget);
+            contentDiv.appendChild(timeDiv);
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(contentDiv);
+            
+            messages.appendChild(messageDiv);
+            messages.scrollTop = messages.scrollHeight;
+        }
+        
+        function toggleQuizDetails(widgetId) {
+            const details = document.getElementById(`quiz-details-${widgetId}`);
+            const btn = document.getElementById(`quiz-toggle-${widgetId}`);
+            
+            if (details.style.display === 'none') {
+                details.style.display = 'block';
+                btn.textContent = '🔼 Hide Your Answers';
+            } else {
+                details.style.display = 'none';
+                btn.textContent = '📊 View Your Answers';
             }
         }
         
@@ -2125,13 +2212,13 @@
                                 </div>
                             </div>
                             <div style="position: relative; padding-bottom: 56.25%; height: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
-                                <iframe 
-                                    src="${video.embedUrl}" 
-                                    frameborder="0" 
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                            <iframe 
+                                src="${video.embedUrl}" 
+                                frameborder="0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                                     allowfullscreen
                                     style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
-                                </iframe>
+                            </iframe>
                             </div>
                         `;
                         contentDiv.appendChild(videoContainer);
@@ -2161,7 +2248,7 @@
                             <div>
                                 <div style="font-weight: 600; font-size: 18px;">${exercise.title}</div>
                                 <div style="font-size: 14px; opacity: 0.9;">${exercise.pattern}</div>
-                            </div>
+                        </div>
                         </div>
                         <div id="breathing-circle-${exerciseId}" style="width: 120px; height: 120px; border-radius: 50%; background: rgba(255,255,255,0.3); margin: 20px auto; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; transition: transform 4s ease-in-out; backdrop-filter: blur(10px);">
                             <span id="breathing-timer-${exerciseId}">${exercise.duration}s</span>
@@ -2385,10 +2472,10 @@
                 });
                 if (response.ok) {
                     const data = await response.json();
-                    currentChatId = chatId;
+            currentChatId = chatId;
                     currentFatigueLevel = data.chat.initial_fatigue_level;
-                    
-                    messages.innerHTML = '';
+            
+            messages.innerHTML = '';
                     chatTitle.textContent = data.chat.title || 'New Conversation';
                     
                     data.messages.forEach(msg => {
@@ -2405,7 +2492,7 @@
                     }
                     
                     await loadChatHistory();
-                    messageInput.focus();
+            messageInput.focus();
                 } else {
                     alert('Failed to load chat');
                 }
