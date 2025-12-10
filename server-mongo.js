@@ -842,15 +842,44 @@ app.post('/api/chat', authenticateUser, async (req, res) => {
 
     let videoContext = '';
     if (availableVideos.length > 0) {
-      videoContext += `\n\nAVAILABLE MEDITATION VIDEOS (use format [VIDEO:title:embed_url] to embed):
-${availableVideos.map(v => `- ${v.title} (embed: ${v.embed_url})`).join('\n')}
-Only suggest videos when the user expresses stress, anxiety, overwhelm, or requests relaxation help.`;
+      videoContext += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎥 AVAILABLE MEDITATION VIDEOS - USE THESE PROACTIVELY!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${availableVideos.map(v => `📹 ${v.title}\n   Format: [VIDEO:${v.title}:${v.embed_url}]`).join('\n\n')}
+
+WHEN TO USE VIDEOS:
+✓ User mentions stress, anxiety, overwhelm, racing thoughts
+✓ User needs help winding down or relaxing
+✓ User asks for guided exercises or meditation
+✓ After a difficult conversation - offer as a calming resource
+✓ When user seems emotionally distressed
+✓ User mentions insomnia or sleep difficulties
+
+HOW TO USE: Simply include [VIDEO:title:embed_url] naturally in your response.
+Example: "I have a gentle meditation that might help. [VIDEO:10 Minute Guided Meditation:https://youtube.com/embed/xyz]"`;
     }
     
     if (availableBreathing.length > 0) {
-      videoContext += `\n\nAVAILABLE BREATHING EXERCISES (use format [BREATHING:title:duration:pattern:embed_code] to embed):
-${availableBreathing.map(b => `- ${b.title} (${b.duration}s, pattern: ${b.pattern}, embed: ${b.embed_code})`).join('\n')}
-Suggest breathing exercises for quick stress relief, anxiety, or when user needs immediate relaxation.`;
+      videoContext += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🫁 BREATHING EXERCISES - OFFER THESE FREQUENTLY!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${availableBreathing.map(b => `💨 ${b.title} (${b.duration}s)
+   Pattern: ${b.pattern}
+   Format: [BREATHING:${b.title}:${b.duration}:${b.pattern}:${b.embed_code || ''}]`).join('\n\n')}
+
+WHEN TO USE BREATHING EXERCISES:
+✓ User mentions anxiety, panic, or feeling overwhelmed
+✓ Quick relief for immediate stress
+✓ User feels tense or restless
+✓ Before bed for better sleep
+✓ During fatigue spikes for energy reset
+✓ When user needs grounding
+✓ At least once per conversation if user seems stressed
+
+HOW TO USE: Include [BREATHING:title:duration:pattern:embedcode] in your response.
+Example: "Let's take a moment to breathe together. [BREATHING:Box Breathing:60:Inhale 4s, Hold 4s, Exhale 4s, Hold 4s:]"
+
+⚠️ IMPORTANT: Be PROACTIVE with these tools! Don't wait for users to ask - suggest them when appropriate.`;
     }
 
     const briefMessages = ['hi', 'hello', 'hey', 'ok', 'okay', 'yes', 'no', 'thanks', 'thank you'];
