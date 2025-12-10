@@ -1073,7 +1073,10 @@
                 <button id="clearInfoBtn" class="clear-info-btn" style="display: none;" onclick="clearAllInfo()">
                     Clear All Info
                 </button>
-                <div class="disclaimer">Not medical advice</div>
+                <button class="profile-button" onclick="showProfileView()" style="background: none; border: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; border-radius: 8px; transition: background 0.2s; width: 100%;" onmouseover="this.style.background='#F5F0E6'" onmouseout="this.style.background='none'">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #FF7A2F, #8FBC8F); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;" id="profileIcon">?</div>
+                    <span style="color: #5C5C5C; font-weight: 500; font-size: 14px;" id="profileName">Profile</span>
+                </button>
                 <div class="status" id="connectionStatus">Connecting...</div>
             </div>
         </div>
@@ -1083,6 +1086,7 @@
             <div class="chat-header">
                 <div class="chat-title" id="chatTitle">New Conversation</div>
                 <div class="chat-actions">
+                    <button id="adminBtn" class="action-btn" onclick="goToAdmin()" style="display: none; background: #FF7A2F; color: white; border: none;">⚙️ Admin</button>
                     <button class="action-btn" onclick="startFatigueQuiz()">Fatigue Quiz</button>
                     <button class="action-btn" onclick="openSettings()">Settings</button>
                     <button class="action-btn" onclick="exportChat()">Export</button>
