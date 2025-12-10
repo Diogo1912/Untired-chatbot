@@ -122,6 +122,12 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password required' });
     }
     
+    // If trying to login as admin, ensure admin exists
+    if (username === 'admin') {
+      const { createDefaultAdminIfNeeded } = require('./database-mongo');
+      await createDefaultAdminIfNeeded();
+    }
+    
     const user = await getUserByUsername(username);
     if (!user) {
       return res.status(401).json({ error: 'Invalid username or password' });
