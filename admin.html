@@ -366,13 +366,12 @@
                 <div class="form-group">
                     <label for="model">AI Model</label>
                     <select id="model">
-                        <option value="gpt-5.1">GPT-5.1 (Full - Most Capable)</option>
-                        <option value="gpt-5.1-mini">GPT-5.1 Mini (Balanced)</option>
-                        <option value="gpt-5.1-nano">GPT-5.1 Nano (Fast & Efficient)</option>
-                        <option value="gpt-4o">GPT-4o (Legacy)</option>
-                        <option value="gpt-4o-mini">GPT-4o Mini (Legacy)</option>
+                        <option value="gpt-4o">GPT-4o (Recommended - Most Capable)</option>
+                        <option value="gpt-4o-mini">GPT-4o Mini (Faster & Cost-Effective)</option>
+                        <option value="gpt-4-turbo">GPT-4 Turbo (Powerful)</option>
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Budget-Friendly)</option>
                     </select>
-                    <div class="form-description">Select the OpenAI model to use for conversations. GPT-5.1 offers the best performance.</div>
+                    <div class="form-description">Select the OpenAI model to use for conversations. GPT-4o offers the best performance.</div>
                 </div>
 
                 <div class="form-group">
@@ -661,7 +660,7 @@
                     
                     // Populate form
                     document.getElementById('systemPrompt').value = aiSettings.system_prompt || '';
-                    document.getElementById('model').value = aiSettings.model || 'gpt-5.1';
+                    document.getElementById('model').value = aiSettings.model || 'gpt-4o';
                     document.getElementById('temperature').value = aiSettings.temperature || 0.8;
                     document.getElementById('tempValue').textContent = aiSettings.temperature || 0.8;
                     document.getElementById('maxTokens').value = aiSettings.max_tokens || 500;

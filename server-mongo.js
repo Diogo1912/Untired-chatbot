@@ -915,7 +915,7 @@ Example: "Let's take a moment to breathe together. [BREATHING:Box Breathing:60:I
     const finalSystemPrompt = systemPrompt + videoContext;
 
     const completion = await openai.chat.completions.create({
-      model: aiSettings.model || 'gpt-5.1',
+      model: aiSettings.model || 'gpt-4o',
       messages: [
         { role: 'system', content: finalSystemPrompt },
         ...formattedMessages.slice(-10)

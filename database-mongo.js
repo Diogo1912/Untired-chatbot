@@ -219,7 +219,7 @@ async function updateChatTitle(chatId, title) {
 }
 
 async function getUserChats(userId, limit = 10) {
-  return await checkDB().collection('chats')
+  return await db.collection('chats')
     .find({ user_id: userId })
     .sort({ updated_at: -1 })
     .limit(limit)
@@ -228,8 +228,8 @@ async function getUserChats(userId, limit = 10) {
 
 async function deleteChat(chatId) {
   await Promise.all([
-    checkDB().collection('chats').deleteOne({ _id: chatId }),
-    checkDB().collection('messages').deleteMany({ chat_id: chatId })
+    db.collection('chats').deleteOne({ _id: chatId }),
+    db.collection('messages').deleteMany({ chat_id: chatId })
   ]);
 }
 
@@ -387,7 +387,7 @@ async function getAISettings() {
       system_prompt: getDefaultSystemPrompt(),
       temperature: 0.8,
       max_tokens: 500,
-      model: 'gpt-5.1',
+      model: 'gpt-4o',
       enabled_tools: ['videos', 'breathing', 'quiz', 'journaling', 'activity_tracking'],
       verbosity: 'medium',
       memory_enabled: true,
