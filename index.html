@@ -1347,6 +1347,11 @@
         const clearInfoBtn = document.getElementById('clearInfoBtn');
         let userSettings = null;
         let currentUser = null;
+        
+        // Navigate to admin console
+        function goToAdmin() {
+            window.location.href = '/admin.html';
+        }
 
         // Generate unique ID
         function generateId() {
@@ -2617,6 +2622,12 @@
             
             // Store userId in localStorage
             localStorage.setItem('untire_userId', userId);
+            
+            // Show admin button if user is admin
+            if (currentUser && currentUser.isAdmin) {
+                const adminBtn = document.getElementById('adminBtn');
+                if (adminBtn) adminBtn.style.display = 'inline-block';
+            }
             
             // Load profile, settings, and chat history
             await loadProfile();
