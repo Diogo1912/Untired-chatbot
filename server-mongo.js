@@ -725,7 +725,7 @@ app.post('/api/welcome-message', authenticateUser, async (req, res) => {
     const aiSettings = await getAISettings();
     
     const completion = await openai.chat.completions.create({
-      model: aiSettings.model || 'gpt-4o',
+      model: aiSettings.model || 'gpt-5.2',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: welcomePrompt }
@@ -874,7 +874,7 @@ Suggest breathing exercises for quick stress relief, anxiety, or when user needs
     const finalSystemPrompt = systemPrompt + videoContext;
 
     const completion = await openai.chat.completions.create({
-      model: aiSettings.model || 'gpt-4o',
+      model: aiSettings.model || 'gpt-5.2',
       messages: [
         { role: 'system', content: finalSystemPrompt },
         ...formattedMessages.slice(-10)
