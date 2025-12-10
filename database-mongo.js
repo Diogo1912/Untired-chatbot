@@ -219,7 +219,7 @@ async function updateChatTitle(chatId, title) {
 }
 
 async function getUserChats(userId, limit = 10) {
-  return await db.collection('chats')
+  return await checkDB().collection('chats')
     .find({ user_id: userId })
     .sort({ updated_at: -1 })
     .limit(limit)

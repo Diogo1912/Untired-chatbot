@@ -2448,13 +2448,13 @@
             
             chats.slice(0, 10).forEach(chat => {
                 const chatItem = document.createElement('div');
-                chatItem.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
+                chatItem.className = `chat-item ${chat._id === currentChatId ? 'active' : ''}`;
                 chatItem.style.position = 'relative';
                 chatItem.style.paddingRight = '40px';
                 
                 const contentDiv = document.createElement('div');
                 contentDiv.style.flex = '1';
-                contentDiv.onclick = () => loadChat(chat.id);
+                contentDiv.onclick = () => loadChat(chat._id);
                 
                 const title = document.createElement('div');
                 title.className = 'chat-item-title';
@@ -2465,15 +2465,20 @@
                 preview.textContent = chat.initial_fatigue_level ? `Fatigue: ${chat.initial_fatigue_level}/10` : 'No messages yet';
                 
                 const deleteBtn = document.createElement('button');
-                deleteBtn.innerHTML = '🗑️';
-                deleteBtn.style.cssText = 'position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 18px; padding: 4px 8px; opacity: 0.6; transition: opacity 0.2s;';
-                deleteBtn.onmouseover = () => deleteBtn.style.opacity = '1';
-                deleteBtn.onmouseout = () => deleteBtn.style.opacity = '0.6';
+                deleteBtn.className = 'chat-delete-btn';
+                deleteBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>`;
+                deleteBtn.style.cssText = 'position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 6px; opacity: 0; transition: opacity 0.2s; color: #C62828; display: flex; align-items: center; justify-content: center;';
                 deleteBtn.onclick = (e) => {
                     e.stopPropagation();
-                    deleteChat(chat.id);
+                    deleteChat(chat._id);
                 };
                 deleteBtn.title = 'Delete chat';
+                
+                // Show delete button on hover
+                chatItem.onmouseenter = () => deleteBtn.style.opacity = '1';
+                chatItem.onmouseleave = () => deleteBtn.style.opacity = '0';
                 
                 contentDiv.appendChild(title);
                 contentDiv.appendChild(preview);
