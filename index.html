@@ -1387,8 +1387,17 @@
                     userProfile = data.profile;
                     updateProfileDisplay();
                     
+                    // Only show profile modal if:
+                    // 1. No profile exists, OR
+                    // 2. Haven't asked today
                     if (!userProfile) {
-                        showProfileModal();
+                        const lastAsked = localStorage.getItem('lastProfileAsked');
+                        const today = new Date().toDateString();
+                        
+                        if (!lastAsked || lastAsked !== today) {
+                            showProfileModal();
+                            localStorage.setItem('lastProfileAsked', today);
+                        }
                     }
                 }
             } catch (error) {
