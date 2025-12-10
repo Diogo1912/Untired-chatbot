@@ -484,6 +484,7 @@ initializeDatabase().catch(console.error);
 module.exports = {
   initializeDatabase,
   closeDatabase,
+  createDefaultAdminIfNeeded,
   getOrCreateUser,
   getUserByUsername,
   createUserWithAuth,
