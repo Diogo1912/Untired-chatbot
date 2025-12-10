@@ -387,7 +387,7 @@ async function getAISettings() {
       system_prompt: getDefaultSystemPrompt(),
       temperature: 0.8,
       max_tokens: 500,
-      model: 'gpt-5.2',
+      model: 'gpt-5.1',
       enabled_tools: ['videos', 'breathing', 'quiz', 'journaling', 'activity_tracking'],
       verbosity: 'medium',
       memory_enabled: true,
