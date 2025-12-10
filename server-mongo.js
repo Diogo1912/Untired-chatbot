@@ -724,21 +724,11 @@ app.post('/api/welcome-message', authenticateUser, async (req, res) => {
     
     const aiSettings = await getAISettings();
     
-    const completion = await openai.chat.completions.create({
-      model: aiSettings.model || 'gpt-5.2',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: welcomePrompt }
-      ],
-      max_tokens: 300,
-      temperature: aiSettings.temperature || 0.8
-    });
-
-    const message = completion.choices[0].message.content;
-    res.json({ message });
+    // DISABLED - No predetermined welcome messages
+    res.json({ message: '' });
   } catch (error) {
     console.error('Welcome message error:', error);
-    res.status(500).json({ error: 'Failed to generate welcome message' });
+    res.json({ message: '' }); // Return empty instead of error
   }
 });
 

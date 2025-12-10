@@ -1548,32 +1548,52 @@
         let quizAnswers = [];
         let quizResult = null;
 
-        async function startFatigueQuiz() {
-            try {
-                const response = await fetch('/api/fatigue-quiz/questions', {
-                    credentials: 'include'
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    quizQuestions = data.questions;
-                    currentQuizQuestion = 0;
-                    quizAnswers = [];
-                    quizResult = null;
-                    
-                    if (quizQuestions.length === 0) {
-                        alert('No quiz questions available. Please contact support.');
-                        return;
-                    }
-                    
-                    fatigueQuizModal.style.display = 'flex';
-                    displayQuizQuestion();
-                } else {
-                    alert('Failed to load quiz questions');
-                }
-            } catch (error) {
-                console.error('Quiz load error:', error);
-                alert('Error loading quiz');
+        // Hardcoded 5 fatigue quiz questions
+        const FATIGUE_QUIZ_QUESTIONS = [
+            {
+                question: "How would you describe your overall energy level today?",
+                type: "scale",
+                min: 1,
+                max: 10,
+                minLabel: "No energy",
+                maxLabel: "Full energy"
+            },
+            {
+                question: "How has your fatigue been affecting your daily activities this past week?",
+                type: "textarea",
+                placeholder: "Describe the impact on work, hobbies, social activities..."
+            },
+            {
+                question: "When do you typically feel most tired during the day?",
+                type: "checkbox",
+                options: ["Morning", "Afternoon", "Evening", "All day", "No clear pattern"]
+            },
+            {
+                question: "How would you rate your sleep quality lately?",
+                type: "radio",
+                options: [
+                    "Very poor (rarely feel rested)",
+                    "Poor (often wake up tired)",
+                    "Fair (sometimes feel rested)",
+                    "Good (usually feel rested)",
+                    "Excellent (always feel refreshed)"
+                ]
+            },
+            {
+                question: "What strategies have you tried to manage your fatigue?",
+                type: "textarea",
+                placeholder: "List any strategies that have or haven't worked..."
             }
+        ];
+
+        async function startFatigueQuiz() {
+            quizQuestions = FATIGUE_QUIZ_QUESTIONS;
+            currentQuizQuestion = 0;
+            quizAnswers = [];
+            quizResult = null;
+            
+            fatigueQuizModal.style.display = 'flex';
+            displayQuizQuestion();
         }
 
         function displayQuizQuestion() {
@@ -1585,7 +1605,7 @@
             resultDiv.style.display = 'none';
             
             if (currentQuizQuestion >= quizQuestions.length) {
-                // Quiz complete - calculate result
+                // Quiz complete - send to AI for assessment
                 calculateQuizResult();
                 return;
             }
@@ -1593,44 +1613,90 @@
             const question = quizQuestions[currentQuizQuestion];
             progress.textContent = `Question ${currentQuizQuestion + 1} of ${quizQuestions.length}`;
             
+            let inputHTML = '';
+            if (question.type === 'scale') {
+                const defaultValue = quizAnswers[currentQuizQuestion] || Math.floor((question.min + question.max) / 2);
+                inputHTML = `
+                    <input type="range" id="quizInput" min="${question.min}" max="${question.max}" value="${defaultValue}" 
+                           oninput="document.getElementById('scaleValue').textContent = this.value" 
+                           style="width: 100%; margin: 20px 0;">
+                    <div style="display: flex; justify-content: space-between; margin: 10px 0;">
+                        <span>${question.minLabel}</span>
+                        <span style="font-size: 24px; font-weight: bold; color: #FF7A2F;" id="scaleValue">${defaultValue}</span>
+                        <span>${question.maxLabel}</span>
+                    </div>
+                `;
+            } else if (question.type === 'textarea') {
+                inputHTML = `
+                    <textarea id="quizInput" placeholder="${question.placeholder}" 
+                              style="width: 100%; min-height: 100px; padding: 10px; border: 2px solid #E7DED3; border-radius: 8px; font-family: inherit; font-size: 16px;"
+                    >${quizAnswers[currentQuizQuestion] || ''}</textarea>
+                `;
+            } else if (question.type === 'radio') {
+                inputHTML = '<div style="display: flex; flex-direction: column; gap: 10px;">';
+                question.options.forEach((option, idx) => {
+                    const checked = quizAnswers[currentQuizQuestion] === option ? 'checked' : '';
+                    inputHTML += `
+                        <label style="display: flex; align-items: center; padding: 12px; border: 2px solid #E7DED3; border-radius: 8px; cursor: pointer;">
+                            <input type="radio" name="quizInput" value="${option}" ${checked} style="margin-right: 10px;">
+                            ${option}
+                        </label>
+                    `;
+                });
+                inputHTML += '</div>';
+            } else if (question.type === 'checkbox') {
+                inputHTML = '<div style="display: flex; flex-direction: column; gap: 10px;">';
+                const savedAnswers = Array.isArray(quizAnswers[currentQuizQuestion]) ? quizAnswers[currentQuizQuestion] : [];
+                question.options.forEach((option, idx) => {
+                    const checked = savedAnswers.includes(option) ? 'checked' : '';
+                    inputHTML += `
+                        <label style="display: flex; align-items: center; padding: 12px; border: 2px solid #E7DED3; border-radius: 8px; cursor: pointer;">
+                            <input type="checkbox" name="quizInput" value="${option}" ${checked} style="margin-right: 10px;">
+                            ${option}
+                        </label>
+                    `;
+                });
+                inputHTML += '</div>';
+            }
+            
             container.innerHTML = `
                 <div class="quiz-question">
-                    <div class="quiz-question-text">${question.question_text}</div>
-                    <div class="quiz-options">
-                        ${question.options.map((option, idx) => `
-                            <div class="quiz-option" onclick="selectQuizOption(${currentQuizQuestion}, ${idx}, ${option.value})">
-                                ${option.text}
-                            </div>
-                        `).join('')}
-                    </div>
+                    <h3 style="margin-bottom: 20px; color: #5C5C5C;">${question.question}</h3>
+                    ${inputHTML}
                 </div>
             `;
             
-            nextBtn.style.display = 'none';
-        }
-
-        function selectQuizOption(questionIndex, optionIndex, value) {
-            // Remove previous selection
-            document.querySelectorAll('.quiz-option').forEach(opt => opt.classList.remove('selected'));
-            
-            // Mark selected
-            event.target.classList.add('selected');
-            
-            // Store answer
-            quizAnswers[questionIndex] = {
-                questionId: quizQuestions[questionIndex].id,
-                selectedOption: optionIndex,
-                optionValue: value
-            };
-            
-            // Show next button
-            document.getElementById('quizNextBtn').style.display = 'block';
+            nextBtn.textContent = currentQuizQuestion === quizQuestions.length - 1 ? 'Submit Quiz' : 'Next';
+            nextBtn.style.display = 'block';
         }
 
         function nextQuizQuestion() {
-            if (!quizAnswers[currentQuizQuestion]) {
-                alert('Please select an answer');
-                return;
+            const question = quizQuestions[currentQuizQuestion];
+            const input = document.getElementById('quizInput');
+            
+            // Save current answer
+            if (question.type === 'scale') {
+                quizAnswers[currentQuizQuestion] = input.value;
+            } else if (question.type === 'textarea') {
+                quizAnswers[currentQuizQuestion] = input.value.trim();
+                if (!quizAnswers[currentQuizQuestion]) {
+                    alert('Please provide an answer');
+                    return;
+                }
+            } else if (question.type === 'radio') {
+                const selected = document.querySelector('input[name="quizInput"]:checked');
+                if (!selected) {
+                    alert('Please select an option');
+                    return;
+                }
+                quizAnswers[currentQuizQuestion] = selected.value;
+            } else if (question.type === 'checkbox') {
+                const selected = Array.from(document.querySelectorAll('input[name="quizInput"]:checked')).map(cb => cb.value);
+                if (selected.length === 0) {
+                    alert('Please select at least one option');
+                    return;
+                }
+                quizAnswers[currentQuizQuestion] = selected;
             }
             
             currentQuizQuestion++;
@@ -1639,23 +1705,67 @@
 
         async function calculateQuizResult() {
             try {
-                const response = await fetch('/api/fatigue-quiz/calculate', {
+                // Prepare summary of answers for AI
+                let summary = "I just completed a fatigue assessment. Here are my answers:\n\n";
+                quizQuestions.forEach((q, idx) => {
+                    const answer = quizAnswers[idx];
+                    summary += `**${q.question}**\n`;
+                    if (Array.isArray(answer)) {
+                        summary += `${answer.join(', ')}\n\n`;
+                    } else {
+                        summary += `${answer}\n\n`;
+                    }
+                });
+                summary += "Based on these responses, please:\n1. Provide a suggested fatigue score (1-10)\n2. Give a brief assessment of my fatigue\n3. Suggest 2-3 personalized strategies that might help me";
+                
+                // Send to chat endpoint for AI assessment
+                const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ answers: quizAnswers })
+                    body: JSON.stringify({
+                        chatId: currentChatId || null,
+                        message: summary
+                    })
                 });
                 
                 if (response.ok) {
                     const data = await response.json();
-                    quizResult = data.suggestedFatigueLevel;
-                    showQuizResult();
+                    
+                    // Extract fatigue score from AI response (look for number/10 pattern)
+                    const scoreMatch = data.response.match(/(\d+)\/10/);
+                    quizResult = scoreMatch ? parseInt(scoreMatch[1]) : 5;
+                    
+                    // Close modal and show result in chat
+                    fatigueQuizModal.style.display = 'none';
+                    addMessage(summary, true);
+                    addMessage(data.response, false);
+                    
+                    // Update fatigue level if extracted
+                    if (quizResult) {
+                        await updateFatigueLevel(quizResult);
+                    }
+                    
+                    alert('✅ Fatigue assessment complete! Check the chat for your personalized results.');
                 } else {
-                    alert('Failed to calculate result');
+                    alert('Failed to get assessment');
                 }
             } catch (error) {
                 console.error('Quiz calculation error:', error);
-                alert('Error calculating result');
+                alert('Error getting assessment');
+            }
+        }
+        
+        async function updateFatigueLevel(level) {
+            try {
+                await fetch(`/api/profile/${userId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ current_fatigue_level: level })
+                });
+            } catch (error) {
+                console.error('Failed to update fatigue level:', error);
             }
         }
 
