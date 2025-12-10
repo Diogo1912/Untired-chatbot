@@ -381,6 +381,18 @@ async function addQuizQuestion(questionText, questionOrder, options, weight = 1.
 // AI Settings operations (Admin configurable)
 async function getAISettings() {
   let settings = await db.collection('ai_settings').findOne({ key: 'global' });
+  
+  // Migration: Fix invalid model names (gpt-5.1 variants don't exist)
+  const invalidModels = ['gpt-5.1', 'gpt-5.1-mini', 'gpt-5.1-nano', 'gpt-5.2'];
+  if (settings && invalidModels.includes(settings.model)) {
+    console.log(`🔧 Migrating invalid model '${settings.model}' to 'gpt-4o'`);
+    await db.collection('ai_settings').updateOne(
+      { key: 'global' },
+      { $set: { model: 'gpt-4o', updated_at: new Date() } }
+    );
+    settings.model = 'gpt-4o';
+  }
+  
   if (!settings) {
     settings = {
       key: 'global',
