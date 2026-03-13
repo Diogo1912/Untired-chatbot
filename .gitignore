@@ -25,3 +25,6 @@ Thumbs.db
 *.swp
 *.swo
 
+# Next.js
+.next/
+dist/
