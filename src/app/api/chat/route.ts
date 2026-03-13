@@ -139,7 +139,13 @@ export async function POST(req: NextRequest) {
       const msgId = addMessage(chat.id, 'assistant', response, nextStep);
       insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: nextStep, model: PRIMARY_MODEL, tokensIn, tokensOut, latencyMs: latency, costUsd: cost, ragChunks: count, riskTriggered: false });
 
-      if (nextStep === 4) markChatCompleted(chat.id);
+      if (nextStep === 4) {
+        markChatCompleted(chat.id);
+        // Extract profile insights async after session completes
+        import('@/lib/profileExtractor').then(({ extractAndUpdateProfile }) => {
+          extractAndUpdateProfile(user.id, chat.id).catch(() => {});
+        });
+      }
       runEval(msgId, chat.id, response, nextStep).catch(() => {});
 
       return NextResponse.json({ chatId: chat.id, response, step: nextStep, completed: nextStep === 4 });

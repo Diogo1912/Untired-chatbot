@@ -198,14 +198,24 @@ export default function ChatPage() {
 
   useEffect(() => { scrollToBottom(); }, [messages, loading]);
 
-  // Check auth
+  // Check auth + onboarding redirect
   useEffect(() => {
     fetch('/api/auth/me')
       .then(r => r.json())
       .then(d => {
         if (!d.user) { router.push('/'); return; }
         setUser(d.user);
-        setAuthChecked(true);
+        // Check if profile has a name; redirect to onboarding if not
+        fetch('/api/profile')
+          .then(r => r.json())
+          .then(pd => {
+            if (!pd.profile?.name) {
+              router.push('/onboarding');
+            } else {
+              setAuthChecked(true);
+            }
+          })
+          .catch(() => setAuthChecked(true));
       });
   }, [router]);
 

@@ -18,11 +18,18 @@ export default function AdminPage() {
   const router = useRouter();
   const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [tab, setTab] = useState<'overview' | 'traces' | 'evals' | 'risks' | 'users'>('overview');
+  const [tab, setTab] = useState<'overview' | 'traces' | 'evals' | 'risks' | 'users' | 'rag'>('overview');
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+
+  const [ragDocs, setRagDocs] = useState<any[]>([]);
+  const [ragTitle, setRagTitle] = useState('');
+  const [ragSource, setRagSource] = useState('');
+  const [ragContent, setRagContent] = useState('');
+  const [ragLoading, setRagLoading] = useState(false);
+  const [ragError, setRagError] = useState('');
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
@@ -30,6 +37,7 @@ export default function AdminPage() {
     });
     loadStats();
     loadUsers();
+    loadRagDocs();
   }, [router]);
 
   async function loadStats() {
@@ -40,6 +48,11 @@ export default function AdminPage() {
   async function loadUsers() {
     const res = await fetch('/api/admin/users');
     if (res.ok) { const d = await res.json(); setUsers(d.users); }
+  }
+
+  async function loadRagDocs() {
+    const res = await fetch('/api/admin/rag');
+    if (res.ok) { const d = await res.json(); setRagDocs(d.documents); }
   }
 
   async function createUser() {
@@ -60,12 +73,36 @@ export default function AdminPage() {
     loadUsers();
   }
 
+  async function ingestDocument() {
+    setRagLoading(true); setRagError('');
+    const res = await fetch('/api/admin/rag', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: ragTitle, source: ragSource, content: ragContent }),
+    });
+    const d = await res.json();
+    if (!res.ok) { setRagError(d.error); }
+    else { setRagTitle(''); setRagSource(''); setRagContent(''); loadRagDocs(); loadStats(); }
+    setRagLoading(false);
+  }
+
+  async function deleteRagDoc(source: string) {
+    if (!confirm('Delete this document from RAG?')) return;
+    await fetch('/api/admin/rag', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source }),
+    });
+    loadRagDocs();
+  }
+
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'traces', label: 'LLM Traces' },
     { id: 'evals', label: 'Evaluations' },
     { id: 'risks', label: 'Risk Events' },
     { id: 'users', label: 'Users' },
+    { id: 'rag', label: 'RAG Content' },
   ] as const;
 
   return (
@@ -310,6 +347,88 @@ export default function AdminPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* RAG Content */}
+        {tab === 'rag' && (
+          <div className="space-y-4">
+            {/* Upload form */}
+            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+              <h3 className="font-semibold text-gray-800 mb-4 text-sm">Add document to RAG</h3>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <input
+                    value={ragTitle} onChange={e => setRagTitle(e.target.value)}
+                    placeholder="Document title (e.g. Energy Management Module)"
+                    className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple/30"
+                  />
+                  <input
+                    value={ragSource} onChange={e => setRagSource(e.target.value)}
+                    placeholder="Source key (e.g. energy-management)"
+                    className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple/30"
+                  />
+                </div>
+                <textarea
+                  value={ragContent} onChange={e => setRagContent(e.target.value)}
+                  placeholder="Paste the document content here..."
+                  rows={8}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple/30 resize-none font-mono"
+                />
+                {ragError && <p className="text-red-500 text-xs">{ragError}</p>}
+                <button
+                  onClick={ingestDocument}
+                  disabled={ragLoading || !ragTitle || !ragSource || !ragContent}
+                  className="px-4 py-2 rounded-xl bg-brand-purple text-white text-sm font-medium hover:bg-brand-purple-light disabled:opacity-50 transition-all"
+                >
+                  {ragLoading ? 'Ingesting...' : 'Ingest document'}
+                </button>
+              </div>
+            </div>
+
+            {/* Documents list */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              {ragDocs.length === 0 ? (
+                <div className="text-center py-12 text-gray-400 text-sm">
+                  No documents ingested yet.<br />
+                  <span className="text-xs">Add Untire Now app content above to ground the AI responses.</span>
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      {['Title', 'Source', 'Chunks', 'Added', 'Actions'].map(h => (
+                        <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {ragDocs.map((doc: any) => (
+                      <tr key={doc.source} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium text-gray-900">{doc.title}</td>
+                        <td className="px-4 py-3 text-xs text-gray-500 font-mono">{doc.source}</td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-0.5 rounded-full bg-brand-purple-pale text-brand-purple text-xs font-medium">
+                            {doc.chunkCount} chunks
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-500">
+                          {new Date(doc.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => deleteRagDoc(doc.source)}
+                            className="text-xs text-red-400 hover:text-red-600"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         )}
