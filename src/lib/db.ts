@@ -1,22 +1,22 @@
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import { randomUUID } from 'crypto';
 
 const DB_PATH = path.join(process.cwd(), 'untire_coach_v2.db');
 
-let _db: Database.Database | null = null;
+let _db: DatabaseSync | null = null;
 
-export function getDb(): Database.Database {
+export function getDb(): DatabaseSync {
   if (!_db) {
-    _db = new Database(DB_PATH);
-    _db.pragma('journal_mode = WAL');
-    _db.pragma('foreign_keys = ON');
+    _db = new DatabaseSync(DB_PATH);
+    _db.exec('PRAGMA journal_mode = WAL');
+    _db.exec('PRAGMA foreign_keys = ON');
     initSchema(_db);
   }
   return _db;
 }
 
-function initSchema(db: Database.Database) {
+function initSchema(db: DatabaseSync) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -149,7 +149,7 @@ function initSchema(db: Database.Database) {
   `);
 
   // Auto-create admin user if none exists
-  const adminExists = db.prepare('SELECT id FROM users WHERE is_admin = 1').get();
+  const adminExists = db.prepare('SELECT id FROM users WHERE is_admin = 1').get() as any;
   if (!adminExists) {
     const bcrypt = require('bcryptjs');
     const hash = bcrypt.hashSync('UntireAdmin2024!', 10);
@@ -160,7 +160,7 @@ function initSchema(db: Database.Database) {
   }
 }
 
-// ─── User helpers ───────────────────────────────────────────────────────────
+// ─── User helpers ────────────────────────────────────────────────────────────
 
 export function getUserByUsername(username: string) {
   return getDb().prepare('SELECT * FROM users WHERE username = ?').get(username) as any;
@@ -184,7 +184,7 @@ export function deleteUser(id: string) {
   getDb().prepare('DELETE FROM users WHERE id = ?').run(id);
 }
 
-// ─── Session helpers ─────────────────────────────────────────────────────────
+// ─── Session helpers ──────────────────────────────────────────────────────────
 
 export function createSession(userId: string, sessionId: string, expiresAt: string) {
   getDb().prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(sessionId, userId, expiresAt);
@@ -198,7 +198,7 @@ export function deleteSession(sessionId: string) {
   getDb().prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
 }
 
-// ─── Profile helpers ─────────────────────────────────────────────────────────
+// ─── Profile helpers ──────────────────────────────────────────────────────────
 
 export function getProfile(userId: string) {
   return getDb().prepare('SELECT * FROM profiles WHERE user_id = ?').get(userId) as any;
@@ -252,7 +252,7 @@ export function deleteChat(chatId: string) {
   getDb().prepare('DELETE FROM chats WHERE id = ?').run(chatId);
 }
 
-// ─── Message helpers ─────────────────────────────────────────────────────────
+// ─── Message helpers ──────────────────────────────────────────────────────────
 
 export function addMessage(chatId: string, role: string, content: string, flowStep?: number, media?: any) {
   const id = randomUUID();
@@ -268,7 +268,7 @@ export function getChatMessages(chatId: string) {
   return rows.map(r => ({ ...r, media: r.media ? JSON.parse(r.media) : null }));
 }
 
-// ─── RAG helpers ─────────────────────────────────────────────────────────────
+// ─── RAG helpers ──────────────────────────────────────────────────────────────
 
 export function insertRagChunk(title: string, source: string, chunkIndex: number, chunkText: string, embedding: number[]) {
   const id = randomUUID();

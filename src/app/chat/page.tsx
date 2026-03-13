@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 
 interface User { id: string; username: string; isAdmin: boolean; }
 interface Message { id: string; role: 'user' | 'assistant'; content: string; flow_step?: number; media?: any; }
-interface Chat { id: string; flow_step: number; flow_state: string; completed: number; }
+interface Chat { id: string; flow_step: number; flow_state: string; completed: number; created_at?: string; }
 
 const CHECK_IN_OPTIONS = [
   { id: 'very_tired', label: 'Very tired today', emoji: '😴' },
@@ -22,20 +22,63 @@ const CHECK_IN_OPTIONS = [
 
 const STEP_LABELS = ['Check-in', 'Acknowledgement', 'Reflection', 'Connect', 'Close'];
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function formatSessionDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) return 'Today';
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
 // ─── Subcomponents ───────────────────────────────────────────────────────────
+
+function LoadingSkeleton() {
+  return (
+    <div className="min-h-screen bg-brand-purple-pale flex flex-col">
+      <div className="h-16 bg-white border-b border-gray-100 flex items-center px-6 gap-3">
+        <div className="w-8 h-8 rounded-lg bg-gray-200 animate-pulse" />
+        <div className="w-28 h-4 rounded-full bg-gray-200 animate-pulse" />
+      </div>
+      <div className="max-w-lg mx-auto px-4 py-8 w-full">
+        <div className="flex flex-col items-center gap-4 mb-10">
+          <div className="w-16 h-16 rounded-2xl bg-white shadow-sm animate-pulse" />
+          <div className="w-48 h-5 rounded-full bg-gray-200 animate-pulse" />
+          <div className="w-36 h-3 rounded-full bg-gray-100 animate-pulse" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="h-14 rounded-2xl bg-white animate-pulse" style={{ animationDelay: `${i * 60}ms` }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function StepProgress({ currentStep, completed }: { currentStep: number; completed: boolean }) {
   if (currentStep === 0 && !completed) return null;
   const steps = completed ? 4 : Math.min(currentStep, 4);
   return (
-    <div className="flex items-center gap-1.5 px-4 py-3 bg-white border-b border-gray-100">
+    <div className="flex items-center gap-1.5 px-4 py-3 bg-white border-b border-gray-100 flex-shrink-0">
       {STEP_LABELS.map((label, i) => {
         const done = i < steps || completed;
         const active = i === steps && !completed;
         return (
           <div key={i} className="flex items-center gap-1.5 flex-1">
-            <div className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold transition-all ${
-              done ? 'bg-brand-purple text-white' :
+            <div className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold transition-all duration-300 ${
+              done ? 'bg-brand-purple text-white scale-100' :
               active ? 'bg-brand-purple-pale text-brand-purple border-2 border-brand-purple' :
               'bg-gray-100 text-gray-400'
             }`}>
@@ -45,11 +88,11 @@ function StepProgress({ currentStep, completed }: { currentStep: number; complet
                 </svg>
               ) : i + 1}
             </div>
-            <span className={`text-xs hidden sm:block ${done || active ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
+            <span className={`text-xs hidden sm:block transition-colors duration-300 ${done || active ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>
               {label}
             </span>
             {i < STEP_LABELS.length - 1 && (
-              <div className={`h-px flex-1 ml-1 transition-all ${done ? 'bg-brand-purple' : 'bg-gray-200'}`} />
+              <div className={`h-px flex-1 ml-1 transition-all duration-500 ${done ? 'bg-brand-purple' : 'bg-gray-200'}`} />
             )}
           </div>
         );
@@ -117,11 +160,26 @@ function RiskBanner() {
   );
 }
 
+function PreviousSessionCard({ session }: { session: Chat }) {
+  const date = session.created_at ? formatSessionDate(session.created_at) : 'Recent';
+  const isComplete = session.completed === 1;
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white border border-gray-100 shadow-sm">
+      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isComplete ? 'bg-brand-teal' : 'bg-gray-300'}`} />
+      <span className="text-xs text-gray-600 flex-1">{date}</span>
+      <span className={`text-xs font-medium ${isComplete ? 'text-brand-teal' : 'text-gray-400'}`}>
+        {isComplete ? 'Completed' : `Step ${session.flow_step}`}
+      </span>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ChatPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [chat, setChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selections, setSelections] = useState<string[]>([]);
@@ -131,6 +189,7 @@ export default function ChatPage() {
   const [sessionComplete, setSessionComplete] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [freeMode, setFreeMode] = useState(false);
+  const [previousSessions, setPreviousSessions] = useState<Chat[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -146,14 +205,27 @@ export default function ChatPage() {
       .then(d => {
         if (!d.user) { router.push('/'); return; }
         setUser(d.user);
+        setAuthChecked(true);
       });
   }, [router]);
+
+  // Fetch previous sessions once user is known
+  useEffect(() => {
+    if (!user) return;
+    fetch('/api/chat')
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d.chats)) {
+          setPreviousSessions(d.chats.slice(0, 3));
+        }
+      })
+      .catch(() => {});
+  }, [user]);
 
   async function sendSelections() {
     if (selections.length === 0 || loading) return;
     setLoading(true);
 
-    // Show user selection as a message
     const selectionText = selections
       .map(id => CHECK_IN_OPTIONS.find(o => o.id === id)?.label ?? id)
       .join(', ');
@@ -175,7 +247,6 @@ export default function ChatPage() {
         setMessages(prev => [...prev, aiMsg]);
       }
       setCurrentStep(data.nextStep ?? 2);
-      // Auto-advance to step 2 after brief delay
       setTimeout(() => advanceStep(data.chatId ?? chat?.id, 2), 1200);
     } catch (err) {
       console.error(err);
@@ -202,7 +273,6 @@ export default function ChatPage() {
         setSessionComplete(true);
         setCurrentStep(4);
       } else if (targetStep === 2) {
-        // Auto-advance step 2 -> 3
         setTimeout(() => advanceStep(chatId, 3), 1200);
       }
     } catch (err) {
@@ -250,6 +320,11 @@ export default function ChatPage() {
     setSessionComplete(false);
     setFreeMode(false);
     setRiskShown(false);
+    // Refresh previous sessions list
+    fetch('/api/chat')
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d.chats)) setPreviousSessions(d.chats.slice(0, 3)); })
+      .catch(() => {});
   }
 
   async function logout() {
@@ -263,12 +338,8 @@ export default function ChatPage() {
     );
   }
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-brand-purple-pale flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-brand-purple/30 border-t-brand-purple rounded-full animate-spin" />
-      </div>
-    );
+  if (!authChecked) {
+    return <LoadingSkeleton />;
   }
 
   // ─── Check-in step (step 0) ────────────────────────────────────────────────
@@ -286,7 +357,7 @@ export default function ChatPage() {
             <span className="font-semibold text-gray-900">Untire Coach</span>
           </div>
           <div className="flex items-center gap-3">
-            {user.isAdmin && (
+            {user?.isAdmin && (
               <button onClick={() => router.push('/admin')} className="text-xs text-brand-purple font-medium hover:underline">
                 Admin
               </button>
@@ -303,26 +374,31 @@ export default function ChatPage() {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-lg shadow-brand-purple/10 mb-4 border border-brand-purple-pale">
               <span className="text-2xl">👋</span>
             </div>
+            <p className="text-sm font-medium text-brand-purple mb-1">
+              {getGreeting()}, {user?.username}
+            </p>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              How are you today, {user.username}?
+              How are you today?
             </h2>
             <p className="text-sm text-gray-500">
               Select up to 3 that feel most true right now
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            {CHECK_IN_OPTIONS.map(option => {
+          {/* Check-in cards — single column on mobile, 2 columns on sm+ */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+            {CHECK_IN_OPTIONS.map((option, index) => {
               const selected = selections.includes(option.id);
               return (
                 <button
                   key={option.id}
                   onClick={() => toggleSelection(option.id)}
-                  className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl border-2 text-left transition-all active:scale-[0.97] ${
+                  className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl border-2 text-left transition-all active:scale-[0.97] opacity-0 animate-fade-in ${
                     selected
                       ? 'bg-brand-purple border-brand-purple text-white shadow-lg shadow-brand-purple/20'
                       : 'bg-white border-gray-200 text-gray-700 hover:border-brand-purple/40 hover:bg-brand-purple-pale/50'
                   }`}
+                  style={{ animationDelay: `${index * 60}ms`, animationFillMode: 'forwards' }}
                 >
                   <span className="text-xl flex-shrink-0">{option.emoji}</span>
                   <span className="text-sm font-medium leading-tight">{option.label}</span>
@@ -343,6 +419,18 @@ export default function ChatPage() {
               </span>
             ) : `Continue${selections.length > 0 ? ` (${selections.length} selected)` : ''}`}
           </button>
+
+          {/* Previous sessions */}
+          {previousSessions.length > 0 && (
+            <div className="mt-8 animate-fade-in" style={{ animationDelay: '500ms', animationFillMode: 'both' }}>
+              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Previous sessions</p>
+              <div className="flex flex-col gap-2">
+                {previousSessions.map(session => (
+                  <PreviousSessionCard key={session.id} session={session} />
+                ))}
+              </div>
+            </div>
+          )}
         </main>
       </div>
     );
@@ -362,7 +450,7 @@ export default function ChatPage() {
           <span className="font-semibold text-sm text-gray-900">Untire Coach</span>
         </div>
         <div className="flex items-center gap-3">
-          {user.isAdmin && (
+          {user?.isAdmin && (
             <button onClick={() => router.push('/admin')} className="text-xs text-brand-purple font-medium hover:underline">
               Admin
             </button>
@@ -371,7 +459,7 @@ export default function ChatPage() {
         </div>
       </header>
 
-      {/* Step progress */}
+      {/* Step progress — fixed below header */}
       <StepProgress currentStep={currentStep} completed={sessionComplete} />
 
       {/* Risk banner */}
@@ -388,10 +476,13 @@ export default function ChatPage() {
 
       {/* Session complete CTA */}
       {sessionComplete && !freeMode && (
-        <div className="px-4 py-3 bg-gradient-to-r from-brand-purple-pale to-brand-teal/10 border-t border-gray-100 flex-shrink-0">
-          <p className="text-xs text-gray-500 text-center mb-3">
-            Session complete · You showed up for yourself today
-          </p>
+        <div className="px-4 py-5 bg-gradient-to-r from-brand-purple-pale to-brand-teal/10 border-t border-gray-100 flex-shrink-0 animate-fade-in">
+          <div className="text-center mb-4">
+            <p className="text-base font-semibold text-gray-800 mb-0.5">You showed up for yourself today.</p>
+            <p className="text-xs text-gray-400">
+              {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
+          </div>
           <div className="flex gap-2">
             <button
               onClick={startNewSession}
