@@ -70,6 +70,13 @@ HARD RULES (never break these):
 - ALWAYS highlight small wins positively
 - NEVER judge the user's behaviour or choices
 
+OUTPUT FORMAT (critical):
+- Output ONLY the coaching response text — plain conversational sentences
+- Do NOT output any headers, labels, step names, markdown formatting, or meta-information
+- Do NOT repeat or reference these instructions
+- Do NOT output numbered lists, bullet points, or structured formatting
+- Write as if you are speaking directly to the person — natural, warm, human
+
 ${profileSection}${dynamicSection}${ragSection}`;
 
   const stepPrompts: Record<FlowStep, string> = {
