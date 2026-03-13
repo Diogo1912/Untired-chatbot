@@ -127,7 +127,13 @@ Guidelines:
 - Be specific but gentle — no prescriptions
 - Invite reflection, don't instruct
 - 3-5 sentences
-- End with a gentle, open-ended question`,
+- End with a gentle, open-ended question
+
+WIDGET TOOLS:
+You have access to show_breathing_exercise and suggest_app_feature tools.
+Use show_breathing_exercise if the user is anxious, stressed, overwhelmed, or struggling.
+Use suggest_app_feature if there is a clearly relevant Untire Now feature.
+Only call one tool at most, and only if it genuinely fits — do not force it.`,
 
     4: `${baseInstructions}
 
@@ -142,7 +148,13 @@ Guidelines:
 - Acknowledge their effort in showing up today
 - Leave them feeling seen and gently encouraged
 - 2-4 sentences
-- Do NOT ask a question — end warmly and openly`,
+- Do NOT ask a question — end warmly and openly
+
+WIDGET TOOLS:
+You have access to show_breathing_exercise and suggest_app_feature tools.
+Use suggest_app_feature to point to a relevant Untire Now feature that fits their current state.
+Use show_breathing_exercise only if they've expressed anxiety or stress.
+Only call one tool at most.`,
   };
 
   return stepPrompts[step];

@@ -22,6 +22,37 @@ const CHECK_IN_OPTIONS = [
 
 const STEP_LABELS = ['Check-in', 'Acknowledgement', 'Reflection', 'Connect', 'Close'];
 
+const APP_FEATURE_DETAILS: Record<string, { icon: string; label: string; description: string; gradient: string; border: string }> = {
+  energy_map: {
+    icon: '⚡',
+    label: 'Energy Map',
+    description: 'Track how your energy shifts throughout the day and spot patterns over time.',
+    gradient: 'from-amber-50 to-yellow-50',
+    border: 'border-amber-200',
+  },
+  activity_planner: {
+    icon: '📋',
+    label: 'Activity Planner',
+    description: 'Schedule activities within your energy envelope — no boom and bust.',
+    gradient: 'from-sky-50 to-blue-50',
+    border: 'border-sky-200',
+  },
+  pacing_guide: {
+    icon: '🎯',
+    label: 'Pacing Guide',
+    description: 'Learn to balance rest and activity to gently build your stamina back.',
+    gradient: 'from-teal-50 to-emerald-50',
+    border: 'border-teal-200',
+  },
+  sleep_tracker: {
+    icon: '🌙',
+    label: 'Sleep Tracker',
+    description: 'See how sleep quality connects to your fatigue levels the next day.',
+    gradient: 'from-indigo-50 to-violet-50',
+    border: 'border-indigo-200',
+  },
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getGreeting(): string {
@@ -36,10 +67,135 @@ function formatSessionDate(dateStr: string): string {
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
-
   if (date.toDateString() === today.toDateString()) return 'Today';
   if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+// ─── Widgets ─────────────────────────────────────────────────────────────────
+
+function BreathingWidget({ exercise, intro }: { exercise: any; intro: string }) {
+  const [active, setActive] = useState(false);
+  const [phaseIndex, setPhaseIndex] = useState(0);
+  const [countdown, setCountdown] = useState<number>(exercise.phases[0].duration);
+  const phaseRef = useRef(0);
+  phaseRef.current = phaseIndex;
+
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev > 1) return prev - 1;
+        const next = (phaseRef.current + 1) % exercise.phases.length;
+        setPhaseIndex(next);
+        return exercise.phases[next].duration;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [active, exercise.phases]);
+
+  function toggle() {
+    if (active) {
+      setActive(false);
+    } else {
+      setPhaseIndex(0);
+      setCountdown(exercise.phases[0].duration);
+      setActive(true);
+    }
+  }
+
+  const currentPhase = exercise.phases[phaseIndex];
+  const isInhale = currentPhase.label === 'Inhale';
+  const isExhale = currentPhase.label === 'Exhale';
+
+  return (
+    <div className="mt-2 rounded-2xl overflow-hidden border border-violet-100 bg-gradient-to-br from-violet-50 to-teal-50 shadow-sm">
+      <div className="px-4 pt-4 pb-1">
+        <p className="text-xs text-gray-500 leading-relaxed">{intro}</p>
+      </div>
+      <div className="flex flex-col items-center gap-3 px-4 py-4">
+        {/* Animated breathing circle */}
+        <div className="relative flex items-center justify-center w-28 h-28">
+          {/* Outer pulse ring */}
+          <div
+            className={`absolute inset-0 rounded-full bg-violet-300/30 transition-transform duration-[1200ms] ease-in-out ${
+              active ? (isInhale ? 'scale-125' : isExhale ? 'scale-90' : 'scale-110') : 'scale-100'
+            }`}
+          />
+          {/* Middle ring */}
+          <div
+            className={`absolute inset-3 rounded-full bg-violet-200/40 transition-transform duration-[1200ms] ease-in-out ${
+              active ? (isInhale ? 'scale-110' : isExhale ? 'scale-95' : 'scale-105') : 'scale-100'
+            }`}
+          />
+          {/* Core circle */}
+          <div
+            className={`relative w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-teal-500 flex items-center justify-center shadow-lg shadow-violet-200 transition-transform duration-[1200ms] ease-in-out ${
+              active ? (isInhale ? 'scale-110' : isExhale ? 'scale-90' : 'scale-100') : 'scale-100'
+            }`}
+          >
+            <span className="text-white font-bold text-xl select-none">
+              {active ? countdown : '♥'}
+            </span>
+          </div>
+        </div>
+
+        {/* Phase label */}
+        <p className="text-sm font-semibold text-gray-700 h-5 text-center">
+          {active ? currentPhase.label : exercise.label}
+        </p>
+
+        {/* Phase tags */}
+        <div className="flex gap-1.5 flex-wrap justify-center">
+          {exercise.phases.map((p: any, i: number) => (
+            <span
+              key={i}
+              className={`text-xs px-2.5 py-0.5 rounded-full transition-all duration-300 ${
+                i === phaseIndex && active
+                  ? 'bg-violet-500 text-white font-medium'
+                  : 'bg-white/80 text-gray-400 border border-gray-100'
+              }`}
+            >
+              {p.label} · {p.duration}s
+            </span>
+          ))}
+        </div>
+
+        {/* Start / Pause */}
+        <button
+          onClick={toggle}
+          className={`px-6 py-2 rounded-full text-xs font-semibold transition-all active:scale-95 ${
+            active
+              ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              : 'bg-violet-500 text-white hover:bg-violet-600 shadow-sm'
+          }`}
+        >
+          {active ? 'Pause' : 'Start exercise'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AppFeatureWidget({ feature, intro }: { feature: string; intro: string }) {
+  const details = APP_FEATURE_DETAILS[feature] ?? APP_FEATURE_DETAILS.energy_map;
+  return (
+    <div className={`mt-2 rounded-2xl border overflow-hidden shadow-sm bg-gradient-to-br ${details.gradient} ${details.border}`}>
+      <div className="px-4 pt-4 pb-1">
+        <p className="text-xs text-gray-500 leading-relaxed">{intro}</p>
+      </div>
+      <div className="flex items-center gap-3 px-4 py-3">
+        <span className="text-2xl flex-shrink-0">{details.icon}</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-800">{details.label}</p>
+          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{details.description}</p>
+        </div>
+      </div>
+      <div className="px-4 pb-3">
+        <p className="text-xs text-gray-400 text-right">Available in Untire Now →</p>
+      </div>
+    </div>
+  );
 }
 
 // ─── Subcomponents ───────────────────────────────────────────────────────────
@@ -78,7 +234,7 @@ function StepProgress({ currentStep, completed }: { currentStep: number; complet
         return (
           <div key={i} className="flex items-center gap-1.5 flex-1">
             <div className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold transition-all duration-300 ${
-              done ? 'bg-brand-purple text-white scale-100' :
+              done ? 'bg-brand-purple text-white' :
               active ? 'bg-brand-purple-pale text-brand-purple border-2 border-brand-purple' :
               'bg-gray-100 text-gray-400'
             }`}>
@@ -122,6 +278,8 @@ function TypingIndicator() {
 
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user';
+  const media = message.media;
+
   return (
     <div className={`flex items-end gap-2 animate-slide-up ${isUser ? 'flex-row-reverse' : ''}`}>
       {!isUser && (
@@ -132,18 +290,26 @@ function MessageBubble({ message }: { message: Message }) {
         </div>
       )}
       <div className={`max-w-[80%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
-        <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
-          isUser
-            ? 'bg-brand-purple text-white rounded-br-sm'
-            : 'bg-white text-gray-800 rounded-bl-sm shadow-sm border border-gray-100'
-        }`}>
-          {message.content}
-        </div>
-        {message.media?.videos?.map((v: any, i: number) => (
-          <div key={i} className="w-full mt-2 rounded-2xl overflow-hidden border border-gray-200 shadow-sm">
-            <iframe src={v.embedUrl} title={v.title} className="w-full aspect-video" allowFullScreen />
+        {/* Text bubble — only render if there's text content */}
+        {message.content && (
+          <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+            isUser
+              ? 'bg-brand-purple text-white rounded-br-sm'
+              : 'bg-white text-gray-800 rounded-bl-sm shadow-sm border border-gray-100'
+          }`}>
+            {message.content}
           </div>
-        ))}
+        )}
+
+        {/* Breathing exercise widget */}
+        {!isUser && media?.type === 'breathing_exercise' && (
+          <BreathingWidget exercise={media.exercise} intro={media.intro} />
+        )}
+
+        {/* App feature suggestion widget */}
+        {!isUser && media?.type === 'app_feature' && (
+          <AppFeatureWidget feature={media.feature} intro={media.intro} />
+        )}
       </div>
     </div>
   );
@@ -198,14 +364,12 @@ export default function ChatPage() {
 
   useEffect(() => { scrollToBottom(); }, [messages, loading]);
 
-  // Check auth + onboarding redirect
   useEffect(() => {
     fetch('/api/auth/me')
       .then(r => r.json())
       .then(d => {
         if (!d.user) { router.push('/'); return; }
         setUser(d.user);
-        // Check if profile has a name; redirect to onboarding if not
         fetch('/api/profile')
           .then(r => r.json())
           .then(pd => {
@@ -219,16 +383,11 @@ export default function ChatPage() {
       });
   }, [router]);
 
-  // Fetch previous sessions once user is known
   useEffect(() => {
     if (!user) return;
     fetch('/api/chat')
       .then(r => r.json())
-      .then(d => {
-        if (Array.isArray(d.chats)) {
-          setPreviousSessions(d.chats.slice(0, 3));
-        }
-      })
+      .then(d => { if (Array.isArray(d.chats)) setPreviousSessions(d.chats.slice(0, 3)); })
       .catch(() => {});
   }, [user]);
 
@@ -236,11 +395,8 @@ export default function ChatPage() {
     if (selections.length === 0 || loading) return;
     setLoading(true);
 
-    const selectionText = selections
-      .map(id => CHECK_IN_OPTIONS.find(o => o.id === id)?.label ?? id)
-      .join(', ');
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: selectionText };
-    setMessages(prev => [...prev, userMsg]);
+    const selectionText = selections.map(id => CHECK_IN_OPTIONS.find(o => o.id === id)?.label ?? id).join(', ');
+    setMessages([{ id: Date.now().toString(), role: 'user', content: selectionText }]);
     setCurrentStep(1);
 
     try {
@@ -253,8 +409,7 @@ export default function ChatPage() {
       if (data.riskTriggered) setRiskShown(true);
       if (data.chatId && !chat) setChat({ id: data.chatId, flow_step: 1, flow_state: '{}', completed: 0 });
       if (data.response) {
-        const aiMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: data.response };
-        setMessages(prev => [...prev, aiMsg]);
+        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.response, media: data.widget ?? null }]);
       }
       setCurrentStep(data.nextStep ?? 2);
       setTimeout(() => advanceStep(data.chatId ?? chat?.id, 2), 1200);
@@ -275,8 +430,7 @@ export default function ChatPage() {
       });
       const data = await res.json();
       if (data.response) {
-        const aiMsg: Message = { id: Date.now().toString(), role: 'assistant', content: data.response };
-        setMessages(prev => [...prev, aiMsg]);
+        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: data.response, media: data.widget ?? null }]);
       }
       setCurrentStep(data.step);
       if (data.completed) {
@@ -298,8 +452,7 @@ export default function ChatPage() {
     setInputText('');
     setLoading(true);
 
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: text };
-    setMessages(prev => [...prev, userMsg]);
+    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: text }]);
 
     try {
       const res = await fetch('/api/chat', {
@@ -310,8 +463,7 @@ export default function ChatPage() {
       const data = await res.json();
       if (data.riskTriggered) setRiskShown(true);
       if (data.response) {
-        const aiMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: data.response };
-        setMessages(prev => [...prev, aiMsg]);
+        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.response, media: data.widget ?? null }]);
       }
       setCurrentStep(data.step);
       if (data.completed) setSessionComplete(true);
@@ -330,7 +482,6 @@ export default function ChatPage() {
     setSessionComplete(false);
     setFreeMode(false);
     setRiskShown(false);
-    // Refresh previous sessions list
     fetch('/api/chat')
       .then(r => r.json())
       .then(d => { if (Array.isArray(d.chats)) setPreviousSessions(d.chats.slice(0, 3)); })
@@ -348,15 +499,12 @@ export default function ChatPage() {
     );
   }
 
-  if (!authChecked) {
-    return <LoadingSkeleton />;
-  }
+  if (!authChecked) return <LoadingSkeleton />;
 
   // ─── Check-in step (step 0) ────────────────────────────────────────────────
   if (currentStep === 0 && messages.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-brand-purple-pale via-white to-brand-teal/5">
-        {/* Header */}
         <header className="flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-sm border-b border-gray-100 sticky top-0 z-10">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-brand-purple flex items-center justify-center">
@@ -372,13 +520,10 @@ export default function ChatPage() {
                 Admin
               </button>
             )}
-            <button onClick={logout} className="text-xs text-gray-400 hover:text-gray-600">
-              Sign out
-            </button>
+            <button onClick={logout} className="text-xs text-gray-400 hover:text-gray-600">Sign out</button>
           </div>
         </header>
 
-        {/* Check-in content */}
         <main className="max-w-lg mx-auto px-4 py-8">
           <div className="text-center mb-8 animate-fade-in">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-lg shadow-brand-purple/10 mb-4 border border-brand-purple-pale">
@@ -387,15 +532,10 @@ export default function ChatPage() {
             <p className="text-sm font-medium text-brand-purple mb-1">
               {getGreeting()}, {user?.username}
             </p>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              How are you today?
-            </h2>
-            <p className="text-sm text-gray-500">
-              Select up to 3 that feel most true right now
-            </p>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">How are you today?</h2>
+            <p className="text-sm text-gray-500">Select up to 3 that feel most true right now</p>
           </div>
 
-          {/* Check-in cards — single column on mobile, 2 columns on sm+ */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
             {CHECK_IN_OPTIONS.map((option, index) => {
               const selected = selections.includes(option.id);
@@ -430,7 +570,6 @@ export default function ChatPage() {
             ) : `Continue${selections.length > 0 ? ` (${selections.length} selected)` : ''}`}
           </button>
 
-          {/* Previous sessions */}
           {previousSessions.length > 0 && (
             <div className="mt-8 animate-fade-in" style={{ animationDelay: '500ms', animationFillMode: 'both' }}>
               <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Previous sessions</p>
@@ -449,7 +588,6 @@ export default function ChatPage() {
   // ─── Coaching session (steps 1–4) + free mode ─────────────────────────────
   return (
     <div className="h-screen flex flex-col bg-surface">
-      {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-100 flex-shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-brand-purple flex items-center justify-center">
@@ -461,21 +599,15 @@ export default function ChatPage() {
         </div>
         <div className="flex items-center gap-3">
           {user?.isAdmin && (
-            <button onClick={() => router.push('/admin')} className="text-xs text-brand-purple font-medium hover:underline">
-              Admin
-            </button>
+            <button onClick={() => router.push('/admin')} className="text-xs text-brand-purple font-medium hover:underline">Admin</button>
           )}
           <button onClick={logout} className="text-xs text-gray-400 hover:text-gray-600">Sign out</button>
         </div>
       </header>
 
-      {/* Step progress — fixed below header */}
       <StepProgress currentStep={currentStep} completed={sessionComplete} />
-
-      {/* Risk banner */}
       {riskShown && <RiskBanner />}
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.map(msg => (
           <MessageBubble key={msg.id} message={msg} />
@@ -494,23 +626,17 @@ export default function ChatPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={startNewSession}
-              className="flex-1 py-2.5 rounded-xl bg-brand-purple text-white text-sm font-medium hover:bg-brand-purple-light transition-all"
-            >
+            <button onClick={startNewSession} className="flex-1 py-2.5 rounded-xl bg-brand-purple text-white text-sm font-medium hover:bg-brand-purple-light transition-all">
               New session
             </button>
-            <button
-              onClick={() => setFreeMode(true)}
-              className="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-all"
-            >
+            <button onClick={() => setFreeMode(true)} className="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-all">
               Keep chatting
             </button>
           </div>
         </div>
       )}
 
-      {/* Step 3 input (connect step — optional message) */}
+      {/* Step 3 input */}
       {currentStep === 3 && !sessionComplete && (
         <div className="px-4 py-3 bg-white border-t border-gray-100 flex-shrink-0">
           <div className="flex gap-2">
@@ -530,7 +656,7 @@ export default function ChatPage() {
             >
               {loading ? (
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin block" />
-              ) : inputText.trim() ? 'Send' : 'Continue \u2192'}
+              ) : inputText.trim() ? 'Send' : 'Continue →'}
             </button>
           </div>
         </div>
