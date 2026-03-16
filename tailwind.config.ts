@@ -5,18 +5,25 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Tired of Cancer / Untire Now brand palette
+        // Warm cream background, white cards, amber primary, sage secondary
         brand: {
-          purple: '#7854C5',
-          'purple-light': '#9B7DD4',
-          'purple-pale': '#F0EBFA',
-          teal: '#53B8B3',
-          'teal-light': '#7ECFCB',
-          green: '#50D38A',
+          // Primary — warm amber (buttons, active states, selections)
+          purple: '#B8722A',
+          'purple-light': '#C98035',
+          'purple-pale': '#FAF4E8',
+          // Secondary — sage green
+          teal: '#6B9E8A',
+          'teal-light': '#88B8A5',
+          green: '#7DB88A',
+          // Icon circle yellow (matches Untire Now app icon backgrounds)
+          yellow: '#F5E4A0',
+          'yellow-light': '#FAF0C8',
         },
         surface: {
-          DEFAULT: '#FAFAF9',
+          DEFAULT: '#F4EFE5',   // warm cream — main page background
           card: '#FFFFFF',
-          muted: '#F5F4F2',
+          muted: '#EDE8DC',
         },
       },
       fontFamily: {

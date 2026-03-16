@@ -2,7 +2,11 @@ import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import { randomUUID } from 'crypto';
 
-const DB_PATH = path.join(process.cwd(), 'untire_coach_v2.db');
+// DATA_DIR lets Railway (or any host) point to a persistent volume.
+// Set DATA_DIR=/data on Railway and mount a volume there.
+// Falls back to cwd for local development.
+const DATA_DIR = process.env.DATA_DIR ?? process.cwd();
+const DB_PATH = path.join(DATA_DIR, 'untire_coach_v2.db');
 
 let _db: DatabaseSync | null = null;
 

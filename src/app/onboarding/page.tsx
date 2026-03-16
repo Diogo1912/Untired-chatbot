@@ -165,7 +165,7 @@ export default function OnboardingPage() {
                   onChange={e => setEnergyLevel(parseInt(e.target.value, 10))}
                   className="w-full h-2 rounded-full appearance-none cursor-pointer accent-brand-purple"
                   style={{
-                    background: `linear-gradient(to right, #7854C5 0%, #7854C5 ${(energyLevel - 1) / 9 * 100}%, #E5E7EB ${(energyLevel - 1) / 9 * 100}%, #E5E7EB 100%)`
+                    background: `linear-gradient(to right, #B8722A 0%, #B8722A ${(energyLevel - 1) / 9 * 100}%, #E5E7EB ${(energyLevel - 1) / 9 * 100}%, #E5E7EB 100%)`
                   }}
                 />
                 <div className="flex justify-between text-xs text-gray-400">

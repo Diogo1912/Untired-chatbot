@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,6 +6,12 @@
 
 :root {
   --font-dm-sans: 'DM Sans', sans-serif;
+  /* Tired of Cancer brand tokens */
+  --color-cream: #F4EFE5;
+  --color-amber: #B8722A;
+  --color-amber-pale: #FAF4E8;
+  --color-sage: #6B9E8A;
+  --color-icon-yellow: #F5E4A0;
 }
 
 * {
@@ -14,8 +20,8 @@
 
 body {
   font-family: var(--font-dm-sans);
-  background-color: #FAFAF9;
-  color: #1a1a1a;
+  background-color: var(--color-cream);
+  color: #1C1917;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -24,7 +30,7 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar — warm tones */
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -32,8 +38,28 @@ html {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d4cfe8;
+  background: #D9D0C0;
   border-radius: 3px;
+}
+
+/* Range input thumb — warm amber */
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-amber);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(184, 114, 42, 0.35);
+}
+input[type='range']::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-amber);
+  cursor: pointer;
+  border: 2px solid white;
 }
 
 /* Prose for AI messages */

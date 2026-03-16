@@ -27,29 +27,29 @@ const APP_FEATURE_DETAILS: Record<string, { icon: string; label: string; descrip
     icon: '⚡',
     label: 'Energy Map',
     description: 'Track how your energy shifts throughout the day and spot patterns over time.',
-    gradient: 'from-amber-50 to-yellow-50',
-    border: 'border-amber-200',
+    gradient: 'from-brand-yellow-light to-brand-purple-pale',
+    border: 'border-brand-yellow',
   },
   activity_planner: {
     icon: '📋',
     label: 'Activity Planner',
     description: 'Schedule activities within your energy envelope — no boom and bust.',
-    gradient: 'from-sky-50 to-blue-50',
-    border: 'border-sky-200',
+    gradient: 'from-brand-purple-pale to-white',
+    border: 'border-brand-purple/20',
   },
   pacing_guide: {
     icon: '🎯',
     label: 'Pacing Guide',
     description: 'Learn to balance rest and activity to gently build your stamina back.',
-    gradient: 'from-teal-50 to-emerald-50',
-    border: 'border-teal-200',
+    gradient: 'from-brand-teal/10 to-white',
+    border: 'border-brand-teal/30',
   },
   sleep_tracker: {
     icon: '🌙',
     label: 'Sleep Tracker',
     description: 'See how sleep quality connects to your fatigue levels the next day.',
-    gradient: 'from-indigo-50 to-violet-50',
-    border: 'border-indigo-200',
+    gradient: 'from-surface-muted to-white',
+    border: 'border-gray-200',
   },
 };
 
@@ -109,7 +109,7 @@ function BreathingWidget({ exercise, intro }: { exercise: any; intro: string }) 
   const isExhale = currentPhase.label === 'Exhale';
 
   return (
-    <div className="mt-2 rounded-2xl overflow-hidden border border-violet-100 bg-gradient-to-br from-violet-50 to-teal-50 shadow-sm">
+    <div className="mt-2 rounded-2xl overflow-hidden border border-brand-purple-pale bg-gradient-to-br from-brand-purple-pale to-brand-teal/10 shadow-sm">
       <div className="px-4 pt-4 pb-1">
         <p className="text-xs text-gray-500 leading-relaxed">{intro}</p>
       </div>
@@ -118,19 +118,19 @@ function BreathingWidget({ exercise, intro }: { exercise: any; intro: string }) 
         <div className="relative flex items-center justify-center w-28 h-28">
           {/* Outer pulse ring */}
           <div
-            className={`absolute inset-0 rounded-full bg-violet-300/30 transition-transform duration-[1200ms] ease-in-out ${
+            className={`absolute inset-0 rounded-full bg-brand-yellow/50 transition-transform duration-[1200ms] ease-in-out ${
               active ? (isInhale ? 'scale-125' : isExhale ? 'scale-90' : 'scale-110') : 'scale-100'
             }`}
           />
           {/* Middle ring */}
           <div
-            className={`absolute inset-3 rounded-full bg-violet-200/40 transition-transform duration-[1200ms] ease-in-out ${
+            className={`absolute inset-3 rounded-full bg-brand-yellow/60 transition-transform duration-[1200ms] ease-in-out ${
               active ? (isInhale ? 'scale-110' : isExhale ? 'scale-95' : 'scale-105') : 'scale-100'
             }`}
           />
           {/* Core circle */}
           <div
-            className={`relative w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-teal-500 flex items-center justify-center shadow-lg shadow-violet-200 transition-transform duration-[1200ms] ease-in-out ${
+            className={`relative w-16 h-16 rounded-full bg-gradient-to-br from-brand-purple to-brand-teal flex items-center justify-center shadow-lg shadow-brand-purple/20 transition-transform duration-[1200ms] ease-in-out ${
               active ? (isInhale ? 'scale-110' : isExhale ? 'scale-90' : 'scale-100') : 'scale-100'
             }`}
           >
@@ -152,7 +152,7 @@ function BreathingWidget({ exercise, intro }: { exercise: any; intro: string }) 
               key={i}
               className={`text-xs px-2.5 py-0.5 rounded-full transition-all duration-300 ${
                 i === phaseIndex && active
-                  ? 'bg-violet-500 text-white font-medium'
+                  ? 'bg-brand-purple text-white font-medium'
                   : 'bg-white/80 text-gray-400 border border-gray-100'
               }`}
             >
@@ -166,8 +166,8 @@ function BreathingWidget({ exercise, intro }: { exercise: any; intro: string }) 
           onClick={toggle}
           className={`px-6 py-2 rounded-full text-xs font-semibold transition-all active:scale-95 ${
             active
-              ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              : 'bg-violet-500 text-white hover:bg-violet-600 shadow-sm'
+              ? 'bg-surface-muted text-gray-600 hover:bg-gray-200'
+              : 'bg-brand-purple text-white hover:bg-brand-purple-light shadow-sm'
           }`}
         >
           {active ? 'Pause' : 'Start exercise'}
