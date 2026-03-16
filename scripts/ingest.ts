@@ -12,7 +12,7 @@
 import path from 'path';
 import fs from 'fs';
 import mammoth from 'mammoth';
-import { insertRagChunk, clearRagDocumentsBySource } from '../src/lib/db';
+import { insertRagChunk, clearRagDocumentsBySource, getDb } from '../src/lib/db';
 import { embedText } from '../src/lib/rag';
 
 // Load .env.local so the script works outside Next.js
@@ -88,6 +88,13 @@ async function ingest() {
     console.error(`Content directory not found: ${absDir}`);
     console.error('Usage: npm run ingest -- /path/to/content');
     process.exit(1);
+  }
+
+  // Skip if already ingested (avoids re-embedding on every restart)
+  const existing = (getDb().prepare('SELECT COUNT(*) as c FROM rag_documents').get() as any).c;
+  if (existing > 0) {
+    console.log(`RAG already has ${existing} chunks — skipping ingestion.`);
+    return;
   }
 
   const SUPPORTED = ['.txt', '.md', '.docx'];
