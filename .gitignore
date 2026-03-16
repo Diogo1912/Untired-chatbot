@@ -28,3 +28,4 @@ Thumbs.db
 # Next.js
 .next/
 dist/
+tsconfig.tsbuildinfo
