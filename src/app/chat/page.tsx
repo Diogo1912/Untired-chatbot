@@ -436,8 +436,6 @@ export default function ChatPage() {
       if (data.completed) {
         setSessionComplete(true);
         setCurrentStep(4);
-      } else if (targetStep === 2) {
-        setTimeout(() => advanceStep(chatId, 3), 1200);
       }
     } catch (err) {
       console.error(err);
@@ -633,6 +631,18 @@ export default function ChatPage() {
               Keep chatting
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Step 2 → Continue to Connect */}
+      {currentStep === 2 && !loading && !sessionComplete && (
+        <div className="px-4 py-3 bg-white border-t border-gray-100 flex-shrink-0">
+          <button
+            onClick={() => advanceStep(chat!.id, 3)}
+            className="w-full py-2.5 rounded-xl bg-brand-purple text-white text-sm font-medium hover:bg-brand-purple-light transition-all"
+          >
+            Continue →
+          </button>
         </div>
       )}
 
