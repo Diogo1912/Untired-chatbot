@@ -1,5 +1,4 @@
-// Import only the type — erased at compile time, zero runtime cost at build
-import type { DatabaseSync } from 'node:sqlite';
+import Database from 'better-sqlite3';
 import path from 'path';
 import { randomUUID } from 'crypto';
 
@@ -9,15 +8,11 @@ import { randomUUID } from 'crypto';
 const DATA_DIR = process.env.DATA_DIR ?? process.cwd();
 const DB_PATH = path.join(DATA_DIR, 'untire_coach_v2.db');
 
-// Lazy: require() is deferred to first call so Next.js build workers never
-// try to load node:sqlite during static analysis / page-data collection.
-let _db: DatabaseSync | null = null;
+let _db: Database.Database | null = null;
 
-export function getDb(): DatabaseSync {
+export function getDb(): Database.Database {
   if (!_db) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { DatabaseSync: DS } = require('node:sqlite') as typeof import('node:sqlite');
-    _db = new DS(DB_PATH) as unknown as DatabaseSync;
+    _db = new Database(DB_PATH);
     _db.exec('PRAGMA journal_mode = WAL');
     _db.exec('PRAGMA foreign_keys = ON');
     initSchema(_db);
@@ -25,7 +20,7 @@ export function getDb(): DatabaseSync {
   return _db;
 }
 
-function initSchema(db: DatabaseSync) {
+function initSchema(db: Database.Database) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,

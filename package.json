@@ -10,7 +10,9 @@
     "ingest": "tsx scripts/ingest.ts"
   },
   "dependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^12.8.0",
     "clsx": "^2.1.1",
     "eventsource-parser": "^3.0.0",
     "framer-motion": "^11.15.0",
