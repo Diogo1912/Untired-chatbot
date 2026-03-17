@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth';
 import {
   getChatById, createChat, addMessage, getChatMessages,
   updateChatStep, markChatCompleted, getProfile, insertTrace, insertRiskEvent,
+  getTodayChat, getCalendarChats, getUserStreak, getUserPreferences,
 } from '@/lib/db';
 import { getOpenRouter, PRIMARY_MODEL, calculateCost } from '@/lib/llm';
 import { parseFlowState, getSystemPromptForStep, FlowStep } from '@/lib/flow';
@@ -160,6 +161,8 @@ export async function POST(req: NextRequest) {
 
     const flowState = parseFlowState(chat.flow_state);
     const profile = getProfile(user.id);
+    const userPrefs = getUserPreferences(user.id);
+    const customPrompt = userPrefs?.custom_prompt ?? '';
 
     // Risk check on every user message
     if (message && typeof message === 'string') {
@@ -179,7 +182,7 @@ export async function POST(req: NextRequest) {
       updateChatStep(chat.id, 1, newState);
 
       const { chunks, count } = await retrieveContext(selections.join(' '), 2);
-      const systemPrompt = getSystemPromptForStep(1, selections, profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '');
+      const systemPrompt = getSystemPromptForStep(1, selections, profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt);
       const { text, tokensIn, tokensOut, latencyMs } = await callLLM(
         systemPrompt,
         [{ role: 'user', content: `I selected: ${selections.join(', ')}` }],
@@ -204,7 +207,7 @@ export async function POST(req: NextRequest) {
       if (message) addMessage(chat.id, 'user', message, step as FlowStep);
 
       const { chunks, count } = await retrieveContext(currentSelections.join(' ') + ' ' + (message ?? ''), 3);
-      const systemPrompt = getSystemPromptForStep(nextStep, currentSelections, profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '');
+      const systemPrompt = getSystemPromptForStep(nextStep, currentSelections, profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt);
 
       const history = getChatMessages(chat.id).slice(-6).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
       const inputMessages = [
@@ -239,7 +242,7 @@ export async function POST(req: NextRequest) {
       addMessage(chat.id, 'user', message, 4);
       const currentState = parseFlowState(chat.flow_state);
       const { chunks, count } = await retrieveContext(message, 2);
-      const systemPrompt = getSystemPromptForStep(3, currentState.userSelections ?? [], profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '');
+      const systemPrompt = getSystemPromptForStep(3, currentState.userSelections ?? [], profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt);
       const history = getChatMessages(chat.id).slice(-8).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
       const { text, widget, tokensIn, tokensOut, latencyMs } = await callLLM(systemPrompt, history, 400, true);
@@ -273,9 +276,29 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ chat, messages });
     }
 
-    const { getUserChats } = await import('@/lib/db');
-    const chats = getUserChats(user.id);
-    return NextResponse.json({ chats });
+    const todayChat = getTodayChat(user.id);
+    const calendarChats = getCalendarChats(user.id, 60);
+    const streak = getUserStreak(user.id);
+    return NextResponse.json({ todayChat, calendarChats, streak });
+  } catch (err: any) {
+    if (err.message === 'UNAUTHORIZED') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const user = await requireAuth();
+    const { searchParams } = new URL(req.url);
+    const chatId = searchParams.get('chatId');
+    if (!chatId) return NextResponse.json({ error: 'chatId required' }, { status: 400 });
+
+    const chat = getChatById(chatId);
+    if (!chat || chat.user_id !== user.id) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    const { deleteChat } = await import('@/lib/db');
+    deleteChat(chatId);
+    return NextResponse.json({ ok: true });
   } catch (err: any) {
     if (err.message === 'UNAUTHORIZED') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

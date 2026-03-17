@@ -145,6 +145,32 @@ function initSchema(db: Database.Database) {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS share_tokens (
+      token TEXT PRIMARY KEY,
+      chat_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS user_preferences (
+      user_id TEXT PRIMARY KEY,
+      custom_prompt TEXT,
+      show_breathing INTEGER DEFAULT 1,
+      show_app_features INTEGER DEFAULT 1,
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_notes (
+      id TEXT PRIMARY KEY,
+      chat_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      note TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_chats_user_id ON chats(user_id);
     CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
     CREATE INDEX IF NOT EXISTS idx_llm_traces_chat_id ON llm_traces(chat_id);
@@ -378,6 +404,101 @@ export function getRiskEvents(limit = 50) {
 }
 
 // ─── Admin stats ──────────────────────────────────────────────────────────────
+
+// ─── Calendar / streak helpers ────────────────────────────────────────────────
+
+export function getTodayChat(userId: string) {
+  return getDb().prepare(
+    "SELECT * FROM chats WHERE user_id = ? AND date(created_at) = date('now') ORDER BY created_at DESC LIMIT 1"
+  ).get(userId) as any;
+}
+
+export function getCalendarChats(userId: string, days = 60) {
+  return getDb().prepare(
+    "SELECT id, completed, flow_step, created_at FROM chats WHERE user_id = ? AND date(created_at) >= date('now', '-' || ? || ' days') ORDER BY created_at DESC"
+  ).all(userId, days) as any[];
+}
+
+export function getUserStreak(userId: string): number {
+  const rows = getDb().prepare(`
+    SELECT DISTINCT date(created_at) as day
+    FROM chats WHERE user_id = ? AND completed = 1
+    ORDER BY day DESC LIMIT 365
+  `).all(userId) as { day: string }[];
+  if (rows.length === 0) return 0;
+
+  let streak = 0;
+  const today = new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  if (rows[0].day !== today) d.setDate(d.getDate() - 1);
+
+  for (const { day } of rows) {
+    if (day === d.toISOString().slice(0, 10)) {
+      streak++;
+      d.setDate(d.getDate() - 1);
+    } else break;
+  }
+  return streak;
+}
+
+// ─── Share token helpers ───────────────────────────────────────────────────────
+
+export function upsertShareToken(chatId: string, userId: string): string {
+  const existing = getDb().prepare('SELECT token FROM share_tokens WHERE chat_id = ?').get(chatId) as any;
+  if (existing) return existing.token;
+  const token = randomUUID().replace(/-/g, '');
+  getDb().prepare(
+    "INSERT INTO share_tokens (token, chat_id, user_id) VALUES (?, ?, ?)"
+  ).run(token, chatId, userId);
+  return token;
+}
+
+export function getChatByShareToken(token: string) {
+  const row = getDb().prepare('SELECT chat_id FROM share_tokens WHERE token = ?').get(token) as any;
+  if (!row) return null;
+  return getChatById(row.chat_id);
+}
+
+// ─── User preference helpers ───────────────────────────────────────────────────
+
+export function getUserPreferences(userId: string) {
+  return getDb().prepare('SELECT * FROM user_preferences WHERE user_id = ?').get(userId) as any;
+}
+
+export function upsertUserPreferences(userId: string, data: { customPrompt?: string; showBreathing?: boolean; showAppFeatures?: boolean }) {
+  const existing = getUserPreferences(userId);
+  if (existing) {
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if (data.customPrompt !== undefined) { sets.push('custom_prompt = ?'); vals.push(data.customPrompt); }
+    if (data.showBreathing !== undefined) { sets.push('show_breathing = ?'); vals.push(data.showBreathing ? 1 : 0); }
+    if (data.showAppFeatures !== undefined) { sets.push('show_app_features = ?'); vals.push(data.showAppFeatures ? 1 : 0); }
+    if (sets.length) {
+      sets.push("updated_at = datetime('now')");
+      getDb().prepare(`UPDATE user_preferences SET ${sets.join(', ')} WHERE user_id = ?`).run(...vals, userId);
+    }
+  } else {
+    getDb().prepare(
+      'INSERT INTO user_preferences (user_id, custom_prompt, show_breathing, show_app_features) VALUES (?, ?, ?, ?)'
+    ).run(userId, data.customPrompt ?? null, data.showBreathing !== false ? 1 : 0, data.showAppFeatures !== false ? 1 : 0);
+  }
+  return getUserPreferences(userId);
+}
+
+// ─── Chat note helpers ─────────────────────────────────────────────────────────
+
+export function getChatNote(chatId: string) {
+  return getDb().prepare('SELECT * FROM chat_notes WHERE chat_id = ? LIMIT 1').get(chatId) as any;
+}
+
+export function upsertChatNote(chatId: string, userId: string, note: string) {
+  const existing = getChatNote(chatId);
+  if (existing) {
+    getDb().prepare('UPDATE chat_notes SET note = ? WHERE chat_id = ?').run(note, chatId);
+  } else {
+    getDb().prepare('INSERT INTO chat_notes (id, chat_id, user_id, note) VALUES (?, ?, ?, ?)').run(randomUUID(), chatId, userId, note);
+  }
+}
 
 export function getAdminStats() {
   const db = getDb();

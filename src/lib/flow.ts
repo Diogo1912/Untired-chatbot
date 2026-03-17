@@ -42,7 +42,8 @@ export function getSystemPromptForStep(
   userSelections: string[],
   profile: any,
   ragContext: string,
-  dynamicProfile: string
+  dynamicProfile: string,
+  customPrompt?: string,
 ): string {
   const profileSection = profile
     ? `USER PROFILE:\n- Name: ${profile.name || 'not provided'}\n- Age: ${profile.age || 'not provided'}\n- Typical fatigue level: ${profile.current_fatigue_level !== null ? `${profile.current_fatigue_level}/10` : 'not provided'}`
@@ -50,6 +51,10 @@ export function getSystemPromptForStep(
 
   const dynamicSection = dynamicProfile
     ? `\nWHAT I KNOW ABOUT THIS USER (from previous conversations):\n${dynamicProfile}`
+    : '';
+
+  const customSection = customPrompt?.trim()
+    ? `\nUSER'S PERSONAL CONTEXT (shared by the user to personalise coaching):\n${customPrompt.trim()}`
     : '';
 
   const ragSection = ragContext
@@ -77,7 +82,7 @@ OUTPUT FORMAT (critical):
 - Do NOT output numbered lists, bullet points, or structured formatting
 - Write as if you are speaking directly to the person — natural, warm, human
 
-${profileSection}${dynamicSection}${ragSection}`;
+${profileSection}${dynamicSection}${customSection}${ragSection}`;
 
   const stepPrompts: Record<FlowStep, string> = {
     0: `${baseInstructions}
