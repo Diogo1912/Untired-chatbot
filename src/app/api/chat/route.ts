@@ -3,9 +3,9 @@ import { requireAuth } from '@/lib/auth';
 import {
   getChatById, createChat, addMessage, getChatMessages,
   updateChatStep, markChatCompleted, getProfile, insertTrace, insertRiskEvent,
-  getTodayChat, getCalendarChats, getUserStreak, getUserPreferences,
+  getTodayChat, getCalendarChats, getUserStreak, getUserPreferences, getUserById,
 } from '@/lib/db';
-import { getOpenRouter, PRIMARY_MODEL, calculateCost } from '@/lib/llm';
+import { getOpenRouter, PRIMARY_MODEL, EVAL_MODEL, calculateCost } from '@/lib/llm';
 import { parseFlowState, getSystemPromptForStep, FlowStep } from '@/lib/flow';
 import { detectRisk, RISK_RESPONSE } from '@/lib/risk';
 import { retrieveContext } from '@/lib/rag';
@@ -147,6 +147,38 @@ async function callLLM(
   };
 }
 
+// ─── Quick reply generator ────────────────────────────────────────────────────
+
+async function generateQuickReplies(aiResponse: string, context: string): Promise<string[]> {
+  try {
+    const client = getOpenRouter();
+    const res = await client.chat.completions.create({
+      model: EVAL_MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: 'You help users navigate a cancer fatigue coaching conversation. Based on the AI coach\'s message, generate exactly 3 short follow-up options (max 8 words each) the user might say next. These should feel personal and help deepen the conversation — not generic. Return ONLY a valid JSON array of 3 strings, nothing else. Example: ["I\'ve been struggling with sleep a lot", "I want to talk about pacing myself", "That really resonates with me"]',
+        },
+        {
+          role: 'user',
+          content: `User context: ${context}\n\nAI coach said: "${aiResponse.slice(0, 400)}"\n\nGenerate 3 follow-up options:`,
+        },
+      ],
+      max_tokens: 150,
+      temperature: 0.85,
+    });
+    const text = res.choices[0].message.content?.trim() ?? '[]';
+    const match = text.match(/\[[\s\S]*?\]/);
+    if (match) {
+      const parsed = JSON.parse(match[0]);
+      if (Array.isArray(parsed)) return parsed.slice(0, 3).map(String);
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 // ─── Route handlers ───────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -184,18 +216,16 @@ export async function POST(req: NextRequest) {
       const { chunks, count } = await retrieveContext(selections.join(' '), 2);
       const systemPrompt = getSystemPromptForStep(1, selections, profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt);
       const { text, tokensIn, tokensOut, latencyMs } = await callLLM(
-        systemPrompt,
-        [{ role: 'user', content: `I selected: ${selections.join(', ')}` }],
-        300,
-        false, // tools off for step 1
+        systemPrompt, [{ role: 'user', content: `I selected: ${selections.join(', ')}` }], 300, false,
       );
+      const suggestions = await generateQuickReplies(text, selections.join(', '));
 
       const cost = calculateCost(PRIMARY_MODEL, tokensIn, tokensOut);
       const msgId = addMessage(chat.id, 'assistant', text, 1);
       insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: 1, model: PRIMARY_MODEL, tokensIn, tokensOut, latencyMs, costUsd: cost, ragChunks: count, riskTriggered: false });
       runEval(msgId, chat.id, text, 1).catch(() => {});
 
-      return NextResponse.json({ chatId: chat.id, response: text, step: 1, nextStep: 2 });
+      return NextResponse.json({ chatId: chat.id, response: text, step: 1, nextStep: 2, suggestions });
     }
 
     // Steps 1→4: advance flow
@@ -234,7 +264,12 @@ export async function POST(req: NextRequest) {
       }
       runEval(msgId, chat.id, text, nextStep).catch(() => {});
 
-      return NextResponse.json({ chatId: chat.id, response: text, widget, step: nextStep, completed: nextStep === 4 });
+      // Offer quick replies at steps 2 and 3 so user always actively responds
+      const suggestions = (nextStep === 2 || nextStep === 3)
+        ? await generateQuickReplies(text, currentSelections.join(', '))
+        : [];
+
+      return NextResponse.json({ chatId: chat.id, response: text, widget, step: nextStep, completed: nextStep === 4, suggestions });
     }
 
     // Free conversation after session
@@ -277,9 +312,10 @@ export async function GET(req: NextRequest) {
     }
 
     const todayChat = getTodayChat(user.id);
-    const calendarChats = getCalendarChats(user.id, 60);
+    const calendarChats = getCalendarChats(user.id, 365);
     const streak = getUserStreak(user.id);
-    return NextResponse.json({ todayChat, calendarChats, streak });
+    const fullUser = getUserById(user.id);
+    return NextResponse.json({ todayChat, calendarChats, streak, userJoinedAt: fullUser?.created_at ?? null });
   } catch (err: any) {
     if (err.message === 'UNAUTHORIZED') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

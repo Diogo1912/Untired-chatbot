@@ -82,14 +82,19 @@ function formatSidebarDate(dateStr: string): { label: string; month: string } {
   return { label, month };
 }
 
-function generateCalendarDays(calendarChats: Chat[], numDays = 30): CalendarDay[] {
+function generateCalendarDays(calendarChats: Chat[], userJoinedAt: string | null, numDays = 365): CalendarDay[] {
   const days: CalendarDay[] = [];
   const today = getTodayStr();
+  // Don't show days before the account was created
+  const joinDate = userJoinedAt ? userJoinedAt.slice(0, 10) : today;
 
   for (let i = 0; i < numDays; i++) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().slice(0, 10);
+
+    if (dateStr < joinDate) break; // stop at account creation date
+
     const chat = calendarChats.find(c => c.created_at?.slice(0, 10) === dateStr);
     const { label, month } = formatSidebarDate(dateStr);
 
@@ -578,6 +583,10 @@ export default function ChatPage() {
   const [streak, setStreak] = useState(0);
   const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
   const [chatsCollapsed, setChatsCollapsed] = useState(false);
+  const [userJoinedAt, setUserJoinedAt] = useState<string | null>(null);
+
+  // Quick reply suggestions (dynamic, from AI)
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   // View — null = today, string = viewing past day chat
   const [viewChatId, setViewChatId] = useState<string | null>(null);
@@ -615,9 +624,11 @@ export default function ChatPage() {
 
     fetch('/api/chat').then(r => r.json()).then(d => {
       const cc: Chat[] = d.calendarChats ?? [];
+      const joinedAt: string | null = d.userJoinedAt ?? null;
       setCalendarChats(cc);
       setStreak(d.streak ?? 0);
-      setCalendarDays(generateCalendarDays(cc, 30));
+      setUserJoinedAt(joinedAt);
+      setCalendarDays(generateCalendarDays(cc, joinedAt));
 
       if (d.todayChat) {
         const tc: Chat = d.todayChat;
@@ -661,9 +672,10 @@ export default function ChatPage() {
   async function refreshCalendar() {
     const d = await fetch('/api/chat').then(r => r.json());
     const cc: Chat[] = d.calendarChats ?? [];
+    const joinedAt: string | null = d.userJoinedAt ?? userJoinedAt;
     setCalendarChats(cc);
     setStreak(d.streak ?? 0);
-    setCalendarDays(generateCalendarDays(cc, 30));
+    setCalendarDays(generateCalendarDays(cc, joinedAt));
   }
 
   // Chat actions
@@ -733,8 +745,9 @@ export default function ChatPage() {
       if (data.response) {
         setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.response, media: data.widget ?? null }]);
       }
-      setCurrentStep(data.nextStep ?? 2);
-      setTimeout(() => advanceStep(data.chatId ?? chat?.id, 2), 1200);
+      // Stay at step 1 — user must pick a suggestion (no auto-advance)
+      setCurrentStep(1);
+      setSuggestions(data.suggestions ?? []);
     } finally {
       setLoading(false);
     }
@@ -742,6 +755,7 @@ export default function ChatPage() {
 
   async function advanceStep(chatId: string, targetStep: number) {
     setLoading(true);
+    setSuggestions([]);
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -753,7 +767,8 @@ export default function ChatPage() {
         setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: data.response, media: data.widget ?? null }]);
       }
       setCurrentStep(data.step);
-      if (data.completed) { setSessionComplete(true); setCurrentStep(4); await refreshCalendar(); }
+      setSuggestions(data.suggestions ?? []);
+      if (data.completed) { setSessionComplete(true); setCurrentStep(4); setSuggestions([]); await refreshCalendar(); }
     } finally {
       setLoading(false);
     }
@@ -763,6 +778,7 @@ export default function ChatPage() {
     if (!inputText.trim() || loading || !chat) return;
     const text = inputText.trim();
     setInputText('');
+    setSuggestions([]);
     setLoading(true);
     setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: text }]);
     try {
@@ -777,7 +793,33 @@ export default function ChatPage() {
         setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.response, media: data.widget ?? null }]);
       }
       setCurrentStep(data.step ?? currentStep);
-      if (data.completed) { setSessionComplete(true); await refreshCalendar(); }
+      setSuggestions(data.suggestions ?? []);
+      if (data.completed) { setSessionComplete(true); setSuggestions([]); await refreshCalendar(); }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Send a quick-reply suggestion as the user's message
+  async function sendQuickReply(text: string) {
+    if (loading || !chat) return;
+    setSuggestions([]);
+    setLoading(true);
+    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: text }]);
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId: chat.id, step: currentStep, message: text }),
+      });
+      const data = await res.json();
+      if (data.riskTriggered) setRiskShown(true);
+      if (data.response) {
+        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.response, media: data.widget ?? null }]);
+      }
+      setCurrentStep(data.step ?? currentStep);
+      setSuggestions(data.suggestions ?? []);
+      if (data.completed) { setSessionComplete(true); setSuggestions([]); await refreshCalendar(); }
     } finally {
       setLoading(false);
     }
@@ -1055,46 +1097,39 @@ export default function ChatPage() {
       </div>
 
       {/* Input area */}
-      {/* Step 2 — manual continue */}
-      {currentStep === 2 && !loading && !sessionComplete && (
-        <div className="px-4 py-3 bg-white border-t border-gray-100 flex-shrink-0">
-          <button
-            onClick={() => advanceStep(chat!.id, 3)}
-            className="w-full py-2.5 rounded-xl bg-brand-purple text-white text-sm font-medium hover:bg-brand-purple-light transition-all"
-          >
-            Continue
-          </button>
-        </div>
-      )}
 
-      {/* Step 3 — optional text + continue */}
-      {currentStep === 3 && !sessionComplete && (
-        <div className="px-4 py-3 bg-white border-t border-gray-100 flex-shrink-0">
-          <div className="flex gap-2">
+      {/* Quick reply suggestions (steps 1-3) — user must pick to advance */}
+      {suggestions.length > 0 && !loading && !sessionComplete && (
+        <div className="px-4 py-3 bg-white border-t border-gray-100 flex-shrink-0 space-y-2">
+          {suggestions.map((s, i) => (
+            <button
+              key={i}
+              onClick={() => sendQuickReply(s)}
+              className="w-full text-left px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 hover:border-brand-purple/40 hover:bg-brand-purple-pale/30 transition-all active:scale-[0.99]"
+            >
+              {s}
+            </button>
+          ))}
+          <div className="flex gap-2 pt-1">
             <input
               type="text"
               value={inputText}
               onChange={e => setInputText(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-              placeholder="Share a thought, or continue..."
-              className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple/20 focus:border-brand-purple"
-              disabled={loading}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (inputText.trim()) sendMessage(); } }}
+              placeholder="Or type your own response..."
+              className="flex-1 px-3 py-2 rounded-xl border border-gray-200 bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple/20 focus:border-brand-purple"
             />
-            <button
-              onClick={inputText.trim() ? sendMessage : () => advanceStep(chat!.id, 4)}
-              disabled={loading}
-              className="px-4 py-2.5 rounded-xl bg-brand-purple text-white text-sm font-medium hover:bg-brand-purple-light transition-all disabled:opacity-50 flex-shrink-0"
-            >
-              {loading ? (
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin block" />
-              ) : inputText.trim() ? 'Send' : 'Continue'}
-            </button>
+            {inputText.trim() && (
+              <button onClick={sendMessage} className="px-4 py-2 rounded-xl bg-brand-purple text-white text-sm font-medium flex-shrink-0">
+                Send
+              </button>
+            )}
           </div>
         </div>
       )}
 
-      {/* Step 4 / free chat — always show input after session complete */}
-      {(sessionComplete || currentStep === 4) && !loading && (
+      {/* Free chat input (after session complete or step 4, no suggestions) */}
+      {(sessionComplete || currentStep === 4) && suggestions.length === 0 && (
         <div className="px-4 py-3 bg-white border-t border-gray-100 flex-shrink-0">
           <div className="flex gap-2">
             <input
@@ -1111,7 +1146,7 @@ export default function ChatPage() {
               disabled={loading || !inputText.trim()}
               className="px-4 py-2.5 rounded-xl bg-brand-purple text-white text-sm font-medium hover:bg-brand-purple-light transition-all disabled:opacity-50 flex-shrink-0"
             >
-              Send
+              {loading ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin block" /> : 'Send'}
             </button>
           </div>
         </div>
