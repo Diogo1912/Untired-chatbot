@@ -33,7 +33,7 @@ if (fs.existsSync(envFile)) {
 const CONTENT_DIR =
   process.argv[2] ??
   process.env.CONTENT_DIR ??
-  path.join(process.cwd(), 'data', 'app-content');
+  path.join(process.cwd(), 'rag-content');
 
 const CHUNK_SIZE = 500;     // words per chunk
 const CHUNK_OVERLAP = 80;   // word overlap between chunks
@@ -85,9 +85,8 @@ async function ingest() {
   const absDir = path.resolve(CONTENT_DIR);
 
   if (!fs.existsSync(absDir)) {
-    console.error(`Content directory not found: ${absDir}`);
-    console.error('Usage: npm run ingest -- /path/to/content');
-    process.exit(1);
+    console.warn(`Content directory not found: ${absDir} — skipping ingest.`);
+    return;
   }
 
   // Skip if already ingested (avoids re-embedding on every restart)
