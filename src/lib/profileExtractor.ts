@@ -1,13 +1,13 @@
 import { getOpenRouter, EVAL_MODEL } from './llm';
-import { getChatMessages, updateDynamicProfile, getProfile } from './db';
+import { getChatMessages, getProfile, insertProfileFact, rebuildDynamicProfile, getProfileFacts } from './db';
 
 export async function extractAndUpdateProfile(userId: string, chatId: string): Promise<void> {
   try {
     const messages = getChatMessages(chatId);
     if (messages.length < 4) return; // Not enough to extract from
 
-    const existing = getProfile(userId);
-    const currentProfile = existing?.dynamic_profile ?? '';
+    const existingFacts = getProfileFacts(userId);
+    const currentFacts = existingFacts.map((f: { content: string }) => `• ${f.content}`).join('\n');
 
     const conversation = messages
       .filter((m: { role: string; content: string }) => m.role === 'user' || m.role === 'assistant')
@@ -21,20 +21,36 @@ export async function extractAndUpdateProfile(userId: string, chatId: string): P
       messages: [
         {
           role: 'system',
-          content: 'You are a profile extraction assistant. Extract concise, factual information from coaching conversations. Return only a brief summary (max 200 words). Focus on: energy patterns, emotional patterns, coping strategies mentioned, personal details shared, goals, challenges. Be factual, not interpretive.'
+          content: `You are a profile extraction assistant. Extract concise, factual information from coaching conversations.
+
+Return ONLY a bullet list of NEW facts not already in the existing facts list. Each bullet starts with "• ".
+Focus on: energy patterns, emotional patterns, coping strategies mentioned, personal details shared, goals, challenges.
+Be factual and specific, not interpretive. Maximum 5 bullets. If there is nothing new, return "NONE".`
         },
         {
           role: 'user',
-          content: `Current profile summary:\n${currentProfile || 'None yet'}\n\nLatest conversation:\n${conversation}\n\nUpdate the profile summary with any new relevant information. Return only the updated summary text, nothing else.`
+          content: `Existing facts:\n${currentFacts || 'None yet'}\n\nLatest conversation:\n${conversation}\n\nList only NEW facts (not already captured above). Return bullet list or NONE.`
         }
       ],
-      max_tokens: 300,
+      max_tokens: 200,
       temperature: 0.2,
     });
 
-    const newProfile = completion.choices[0].message.content?.trim();
-    if (newProfile && newProfile !== currentProfile) {
-      updateDynamicProfile(userId, newProfile);
+    const output = completion.choices[0].message.content?.trim();
+    if (!output || output === 'NONE') return;
+
+    // Parse bullet lines
+    const newFacts = output
+      .split('\n')
+      .map((l: string) => l.replace(/^[•\-*]\s*/, '').trim())
+      .filter((l: string) => l.length > 5 && l !== 'NONE');
+
+    for (const fact of newFacts) {
+      insertProfileFact(userId, fact);
+    }
+
+    if (newFacts.length > 0) {
+      rebuildDynamicProfile(userId);
     }
   } catch {
     // Non-critical — fail silently

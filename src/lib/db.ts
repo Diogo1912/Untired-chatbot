@@ -171,6 +171,15 @@ function initSchema(db: Database.Database) {
       FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS profile_facts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_profile_facts_user_id ON profile_facts(user_id);
     CREATE INDEX IF NOT EXISTS idx_chats_user_id ON chats(user_id);
     CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
     CREATE INDEX IF NOT EXISTS idx_llm_traces_chat_id ON llm_traces(chat_id);
@@ -498,6 +507,44 @@ export function upsertChatNote(chatId: string, userId: string, note: string) {
   } else {
     getDb().prepare('INSERT INTO chat_notes (id, chat_id, user_id, note) VALUES (?, ?, ?, ?)').run(randomUUID(), chatId, userId, note);
   }
+}
+
+// ─── Profile facts helpers ────────────────────────────────────────────────────
+
+export function getProfileFacts(userId: string) {
+  return getDb().prepare('SELECT * FROM profile_facts WHERE user_id = ? ORDER BY created_at ASC').all(userId) as any[];
+}
+
+export function insertProfileFact(userId: string, content: string) {
+  const trimmed = content.trim();
+  if (!trimmed) return;
+  // Skip if exact duplicate already exists
+  const exists = getDb().prepare('SELECT id FROM profile_facts WHERE user_id = ? AND content = ?').get(userId, trimmed);
+  if (exists) return;
+  getDb().prepare('INSERT INTO profile_facts (id, user_id, content) VALUES (?, ?, ?)').run(randomUUID(), userId, trimmed);
+}
+
+export function deleteProfileFact(id: string, userId: string) {
+  getDb().prepare('DELETE FROM profile_facts WHERE id = ? AND user_id = ?').run(id, userId);
+}
+
+export function rebuildDynamicProfile(userId: string) {
+  const facts = getProfileFacts(userId);
+  const text = facts.map(f => `• ${f.content}`).join('\n');
+  updateDynamicProfile(userId, text);
+}
+
+// Migrate existing dynamic_profile text into profile_facts rows (one-time)
+export function migrateProfileToFacts(userId: string) {
+  const existing = getProfileFacts(userId);
+  if (existing.length > 0) return; // already migrated
+  const profile = getProfile(userId);
+  if (!profile?.dynamic_profile) return;
+  const lines = profile.dynamic_profile
+    .split('\n')
+    .map((l: string) => l.replace(/^[•\-*]\s*/, '').trim())
+    .filter((l: string) => l.length > 10);
+  for (const line of lines) insertProfileFact(userId, line);
 }
 
 export function getAdminStats() {
