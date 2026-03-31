@@ -4,10 +4,16 @@ const PRIMARY_MODEL = process.env.PRIMARY_MODEL ?? 'anthropic/claude-sonnet-4-5'
 const EVAL_MODEL = process.env.EVAL_MODEL ?? 'anthropic/claude-haiku-4-5';
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? 'openai/text-embedding-3-small';
 
-// Cost per 1M tokens (in USD) — approximate OpenRouter pricing
+// Cost per 1M tokens (in USD) — configurable via env vars, defaults to OpenRouter pricing
 const COST_MAP: Record<string, { input: number; output: number }> = {
-  'anthropic/claude-sonnet-4-5': { input: 3.0, output: 15.0 },
-  'anthropic/claude-haiku-4-5': { input: 0.8, output: 4.0 },
+  [PRIMARY_MODEL]: {
+    input: parseFloat(process.env.PRIMARY_COST_INPUT ?? '3.0'),
+    output: parseFloat(process.env.PRIMARY_COST_OUTPUT ?? '15.0'),
+  },
+  [EVAL_MODEL]: {
+    input: parseFloat(process.env.EVAL_COST_INPUT ?? '0.8'),
+    output: parseFloat(process.env.EVAL_COST_OUTPUT ?? '4.0'),
+  },
 };
 
 export function getOpenRouter() {

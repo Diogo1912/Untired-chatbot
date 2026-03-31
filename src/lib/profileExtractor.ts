@@ -52,7 +52,7 @@ Be factual and specific, not interpretive. Maximum 5 bullets. If there is nothin
     if (newFacts.length > 0) {
       rebuildDynamicProfile(userId);
     }
-  } catch {
-    // Non-critical — fail silently
+  } catch (err) {
+    console.error('Profile extraction failed:', err instanceof Error ? err.message : err);
   }
 }

@@ -187,6 +187,17 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_risk_events_user_id ON risk_events(user_id);
   `);
 
+  // ─── Schema migrations (idempotent) ──────────────────────────────────────
+  const migrations = [
+    'ALTER TABLE eval_scores ADD COLUMN contextual_relevance INTEGER DEFAULT 1',
+    'ALTER TABLE eval_scores ADD COLUMN error TEXT',
+    'ALTER TABLE eval_scores ADD COLUMN reviewed INTEGER DEFAULT 0',
+    'ALTER TABLE llm_traces ADD COLUMN rag_top_similarity REAL',
+  ];
+  for (const m of migrations) {
+    try { db.exec(m); } catch { /* column already exists */ }
+  }
+
   // Auto-create admin user if none exists
   const adminExists = db.prepare('SELECT id FROM users WHERE is_admin = 1').get() as any;
   if (!adminExists) {
@@ -331,24 +342,30 @@ export function insertTrace(data: {
   userId?: string; chatId?: string; messageId?: string; flowStep?: number;
   model: string; tokensIn: number; tokensOut: number; latencyMs: number;
   costUsd: number; ragChunks: number; riskTriggered: boolean;
+  ragTopSimilarity?: number | null;
 }) {
   const id = randomUUID();
   getDb().prepare(`
-    INSERT INTO llm_traces (id, user_id, chat_id, message_id, flow_step, model, tokens_in, tokens_out, latency_ms, cost_usd, rag_chunks_retrieved, risk_triggered)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO llm_traces (id, user_id, chat_id, message_id, flow_step, model, tokens_in, tokens_out, latency_ms, cost_usd, rag_chunks_retrieved, risk_triggered, rag_top_similarity)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, data.userId ?? null, data.chatId ?? null, data.messageId ?? null,
     data.flowStep ?? null, data.model, data.tokensIn, data.tokensOut,
-    data.latencyMs, data.costUsd, data.ragChunks, data.riskTriggered ? 1 : 0
+    data.latencyMs, data.costUsd, data.ragChunks, data.riskTriggered ? 1 : 0,
+    data.ragTopSimilarity ?? null
   );
   return id;
 }
 
-export function getTraces(limit = 100) {
+export function getTraces(limit = 100, from?: string, to?: string) {
+  if (from && to) {
+    return getDb().prepare('SELECT * FROM llm_traces WHERE created_at BETWEEN ? AND ? ORDER BY created_at DESC LIMIT ?').all(from, to, limit) as any[];
+  }
   return getDb().prepare('SELECT * FROM llm_traces ORDER BY created_at DESC LIMIT ?').all(limit) as any[];
 }
 
-export function getTraceStats() {
+export function getTraceStats(from?: string, to?: string) {
+  const dateFilter = from && to ? `WHERE created_at BETWEEN '${from}' AND '${to}'` : '';
   return getDb().prepare(`
     SELECT
       COUNT(*) as total_requests,
@@ -356,43 +373,203 @@ export function getTraceStats() {
       SUM(tokens_in + tokens_out) as total_tokens,
       SUM(cost_usd) as total_cost_usd,
       SUM(risk_triggered) as total_risk_events,
-      SUM(rag_chunks_retrieved) as total_rag_retrievals
-    FROM llm_traces
+      SUM(rag_chunks_retrieved) as total_rag_retrievals,
+      AVG(rag_top_similarity) as avg_rag_similarity
+    FROM llm_traces ${dateFilter}
   `).get() as any;
+}
+
+export function getCompletionStats(from?: string, to?: string) {
+  const dateFilter = from && to ? `WHERE created_at BETWEEN '${from}' AND '${to}'` : '';
+  const db = getDb();
+  const totals = db.prepare(`
+    SELECT COUNT(*) as total_chats, SUM(completed) as completed_chats
+    FROM chats ${dateFilter}
+  `).get() as any;
+  const dropout = db.prepare(`
+    SELECT flow_step, COUNT(*) as count
+    FROM chats
+    ${dateFilter ? dateFilter + ' AND' : 'WHERE'} completed = 0
+    GROUP BY flow_step ORDER BY flow_step
+  `).all() as any[];
+  return {
+    totalChats: totals.total_chats,
+    completedChats: totals.completed_chats ?? 0,
+    completionRate: totals.total_chats > 0 ? (totals.completed_chats ?? 0) / totals.total_chats : 0,
+    dropoutByStep: dropout,
+  };
+}
+
+// ─── Trend helpers ─────────────────────────────────────────────────────────
+
+export function getEvalTrend(days = 30) {
+  return getDb().prepare(`
+    SELECT date(created_at) as day,
+      AVG(tone_score) as avg_tone,
+      AVG(CAST(safety_pass AS REAL)) as safety_rate,
+      AVG(CAST(flow_compliance AS REAL)) as flow_rate,
+      AVG(CAST(contextual_relevance AS REAL)) as relevance_rate,
+      COUNT(*) as eval_count
+    FROM eval_scores
+    WHERE tone_score IS NOT NULL AND created_at >= datetime('now', '-' || ? || ' days')
+    GROUP BY date(created_at)
+    ORDER BY day
+  `).all(days) as any[];
+}
+
+export function getTraceTrend(days = 30) {
+  return getDb().prepare(`
+    SELECT date(created_at) as day,
+      COUNT(*) as request_count,
+      AVG(latency_ms) as avg_latency,
+      SUM(cost_usd) as daily_cost,
+      AVG(rag_top_similarity) as avg_rag_similarity
+    FROM llm_traces
+    WHERE created_at >= datetime('now', '-' || ? || ' days')
+    GROUP BY date(created_at)
+    ORDER BY day
+  `).all(days) as any[];
+}
+
+export function getVolumeTrend(days = 30) {
+  return getDb().prepare(`
+    SELECT date(created_at) as day,
+      COUNT(*) as message_count,
+      (SELECT COUNT(*) FROM chats WHERE date(chats.created_at) = date(messages.created_at)) as session_count
+    FROM messages
+    WHERE created_at >= datetime('now', '-' || ? || ' days')
+    GROUP BY date(created_at)
+    ORDER BY day
+  `).all(days) as any[];
 }
 
 // ─── Eval helpers ─────────────────────────────────────────────────────────────
 
 export function insertEval(data: {
-  messageId: string; chatId?: string; toneScore: number;
-  flowCompliance: boolean; lengthCompliance: boolean; safetyPass: boolean;
-  evalModel: string; evalLatencyMs: number; evalReasoning?: string;
+  messageId: string; chatId?: string; toneScore: number | null;
+  flowCompliance: boolean | null; lengthCompliance: boolean | null; safetyPass: boolean | null;
+  contextualRelevance?: boolean | null;
+  evalModel: string; evalLatencyMs: number; evalReasoning?: string | null;
+  error?: string | null;
 }) {
   const id = randomUUID();
   getDb().prepare(`
-    INSERT INTO eval_scores (id, message_id, chat_id, tone_score, flow_compliance, length_compliance, safety_pass, eval_model, eval_latency_ms, eval_reasoning)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO eval_scores (id, message_id, chat_id, tone_score, flow_compliance, length_compliance, safety_pass, contextual_relevance, eval_model, eval_latency_ms, eval_reasoning, error)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    id, data.messageId, data.chatId ?? null, data.toneScore,
-    data.flowCompliance ? 1 : 0, data.lengthCompliance ? 1 : 0, data.safetyPass ? 1 : 0,
-    data.evalModel, data.evalLatencyMs, data.evalReasoning ?? null
+    id, data.messageId, data.chatId ?? null,
+    data.toneScore,
+    data.flowCompliance == null ? null : data.flowCompliance ? 1 : 0,
+    data.lengthCompliance == null ? null : data.lengthCompliance ? 1 : 0,
+    data.safetyPass == null ? null : data.safetyPass ? 1 : 0,
+    data.contextualRelevance == null ? null : data.contextualRelevance ? 1 : 0,
+    data.evalModel, data.evalLatencyMs, data.evalReasoning ?? null,
+    data.error ?? null,
   );
 }
 
-export function getEvalScores(limit = 100) {
+export function getEvalScores(limit = 100, from?: string, to?: string) {
+  if (from && to) {
+    return getDb().prepare('SELECT * FROM eval_scores WHERE created_at BETWEEN ? AND ? ORDER BY created_at DESC LIMIT ?').all(from, to, limit) as any[];
+  }
   return getDb().prepare('SELECT * FROM eval_scores ORDER BY created_at DESC LIMIT ?').all(limit) as any[];
 }
 
-export function getEvalStats() {
+export function getEvalStats(from?: string, to?: string) {
+  const whereClause = from && to ? `WHERE tone_score IS NOT NULL AND created_at BETWEEN '${from}' AND '${to}'` : 'WHERE tone_score IS NOT NULL';
+  const allClause = from && to ? `WHERE created_at BETWEEN '${from}' AND '${to}'` : '';
   return getDb().prepare(`
     SELECT
-      COUNT(*) as total_evals,
+      (SELECT COUNT(*) FROM eval_scores ${allClause}) as total_evals,
+      (SELECT COUNT(*) FROM eval_scores ${allClause.replace('WHERE', 'WHERE error IS NOT NULL AND')
+        || 'WHERE error IS NOT NULL'}) as eval_errors,
       AVG(tone_score) as avg_tone_score,
       AVG(CAST(flow_compliance AS REAL)) as flow_compliance_rate,
       AVG(CAST(length_compliance AS REAL)) as length_compliance_rate,
-      AVG(CAST(safety_pass AS REAL)) as safety_pass_rate
-    FROM eval_scores
+      AVG(CAST(safety_pass AS REAL)) as safety_pass_rate,
+      AVG(CAST(contextual_relevance AS REAL)) as contextual_relevance_rate
+    FROM eval_scores ${whereClause}
   `).get() as any;
+}
+
+export function getEvalCoverage(from?: string, to?: string) {
+  const dateFilter = from && to ? `AND created_at BETWEEN '${from}' AND '${to}'` : '';
+  const totalAi = (getDb().prepare(`SELECT COUNT(*) as c FROM messages WHERE role = 'assistant' ${dateFilter}`).get() as any).c;
+  const totalEvals = (getDb().prepare(`SELECT COUNT(*) as c FROM eval_scores WHERE 1=1 ${dateFilter}`).get() as any).c;
+  return { totalAiMessages: totalAi, totalEvals, coverageRate: totalAi > 0 ? totalEvals / totalAi : 0 };
+}
+
+export function getEvalStatsByStep(from?: string, to?: string) {
+  const dateFilter = from && to ? `AND e.created_at BETWEEN '${from}' AND '${to}'` : '';
+  return getDb().prepare(`
+    SELECT
+      m.flow_step,
+      COUNT(*) as eval_count,
+      AVG(e.tone_score) as avg_tone,
+      AVG(CAST(e.flow_compliance AS REAL)) as flow_compliance_rate,
+      AVG(CAST(e.length_compliance AS REAL)) as length_compliance_rate,
+      AVG(CAST(e.safety_pass AS REAL)) as safety_pass_rate,
+      AVG(CAST(e.contextual_relevance AS REAL)) as contextual_relevance_rate
+    FROM eval_scores e
+    JOIN messages m ON e.message_id = m.id
+    WHERE e.tone_score IS NOT NULL ${dateFilter}
+    GROUP BY m.flow_step
+    ORDER BY m.flow_step
+  `).all() as any[];
+}
+
+export function getQualityScorecard(from?: string, to?: string) {
+  const dateFilter = from && to ? `AND created_at BETWEEN '${from}' AND '${to}'` : '';
+  const db = getDb();
+
+  const stats = db.prepare(`
+    SELECT
+      COUNT(*) as total,
+      AVG(tone_score) as avg_tone,
+      AVG(CAST(safety_pass AS REAL)) as safety_rate,
+      AVG(CAST(flow_compliance AS REAL)) as flow_rate,
+      AVG(CAST(contextual_relevance AS REAL)) as relevance_rate,
+      AVG(CAST(length_compliance AS REAL)) as length_rate
+    FROM eval_scores
+    WHERE tone_score IS NOT NULL ${dateFilter}
+  `).get() as any;
+
+  const distribution = db.prepare(`
+    SELECT tone_score, COUNT(*) as count
+    FROM eval_scores
+    WHERE tone_score IS NOT NULL ${dateFilter}
+    GROUP BY tone_score
+    ORDER BY tone_score
+  `).all() as any[];
+
+  const errorCount = (db.prepare(`SELECT COUNT(*) as c FROM eval_scores WHERE error IS NOT NULL ${dateFilter}`).get() as any).c;
+
+  return { stats, distribution, errorCount };
+}
+
+export function getFlaggedResponses(limit = 50) {
+  return getDb().prepare(`
+    SELECT
+      e.*,
+      m.content as ai_message,
+      m.flow_step,
+      m.chat_id,
+      (SELECT m2.content FROM messages m2 WHERE m2.chat_id = m.chat_id AND m2.role = 'user' AND m2.created_at < m.created_at ORDER BY m2.created_at DESC LIMIT 1) as user_message
+    FROM eval_scores e
+    JOIN messages m ON e.message_id = m.id
+    WHERE e.tone_score IS NOT NULL
+      AND e.reviewed = 0
+      AND (e.safety_pass = 0 OR e.tone_score <= 2 OR e.flow_compliance = 0 OR e.contextual_relevance = 0)
+    ORDER BY
+      CASE WHEN e.safety_pass = 0 THEN 0 ELSE 1 END,
+      e.tone_score ASC,
+      e.created_at DESC
+    LIMIT ?
+  `).all(limit) as any[];
+}
+
+export function markEvalReviewed(evalId: string) {
+  getDb().prepare('UPDATE eval_scores SET reviewed = 1 WHERE id = ?').run(evalId);
 }
 
 // ─── Risk event helpers ───────────────────────────────────────────────────────
@@ -408,7 +585,10 @@ export function insertRiskEvent(data: {
   `).run(id, data.userId ?? null, data.chatId ?? null, data.messageContent, data.triggerType, data.severity ?? 'moderate');
 }
 
-export function getRiskEvents(limit = 50) {
+export function getRiskEvents(limit = 50, from?: string, to?: string) {
+  if (from && to) {
+    return getDb().prepare('SELECT * FROM risk_events WHERE created_at BETWEEN ? AND ? ORDER BY created_at DESC LIMIT ?').all(from, to, limit) as any[];
+  }
   return getDb().prepare('SELECT * FROM risk_events ORDER BY created_at DESC LIMIT ?').all(limit) as any[];
 }
 
@@ -556,4 +736,88 @@ export function getAdminStats() {
     totalMessages: (db.prepare('SELECT COUNT(*) as c FROM messages').get() as any).c,
     ragDocuments: (db.prepare('SELECT COUNT(*) as c FROM rag_documents').get() as any).c,
   };
+}
+
+// ─── Per-user analytics ──────────────────────────────────────────────────────
+
+export function getAllUserAnalytics() {
+  return getDb().prepare(`
+    SELECT
+      u.id, u.username, u.created_at as joined_at,
+      COUNT(DISTINCT c.id) as total_sessions,
+      SUM(CASE WHEN c.completed = 1 THEN 1 ELSE 0 END) as completed_sessions,
+      COALESCE(SUM(t.cost_usd), 0) as total_cost,
+      AVG(e.tone_score) as avg_tone,
+      SUM(CASE WHEN e.safety_pass = 0 THEN 1 ELSE 0 END) as safety_fails,
+      MAX(c.created_at) as last_active
+    FROM users u
+    LEFT JOIN chats c ON c.user_id = u.id
+    LEFT JOIN llm_traces t ON t.chat_id = c.id
+    LEFT JOIN messages m ON m.chat_id = c.id AND m.role = 'assistant'
+    LEFT JOIN eval_scores e ON e.message_id = m.id AND e.tone_score IS NOT NULL
+    WHERE u.is_admin = 0
+    GROUP BY u.id
+    ORDER BY last_active DESC
+  `).all() as any[];
+}
+
+export function getFatigueTrend(userId: string) {
+  return getDb().prepare(`
+    SELECT date(created_at) as day, initial_fatigue_level as fatigue
+    FROM chats
+    WHERE user_id = ? AND initial_fatigue_level IS NOT NULL
+    ORDER BY created_at
+  `).all(userId) as any[];
+}
+
+// ─── Conversation QA helpers ─────────────────────────────────────────────────
+
+export function getSessionsWithQuality(from?: string, to?: string, limit = 50) {
+  const dateFilter = from && to ? `AND c.created_at BETWEEN '${from}' AND '${to}'` : '';
+  return getDb().prepare(`
+    SELECT
+      c.id as chat_id,
+      c.user_id,
+      u.username,
+      c.completed,
+      c.flow_step,
+      c.created_at,
+      COUNT(DISTINCT m.id) as message_count,
+      AVG(e.tone_score) as avg_tone,
+      MIN(e.tone_score) as min_tone,
+      SUM(CASE WHEN e.safety_pass = 0 THEN 1 ELSE 0 END) as safety_fails,
+      SUM(CASE WHEN e.flow_compliance = 0 THEN 1 ELSE 0 END) as flow_fails,
+      SUM(CASE WHEN e.contextual_relevance = 0 THEN 1 ELSE 0 END) as relevance_fails
+    FROM chats c
+    JOIN users u ON u.id = c.user_id
+    LEFT JOIN messages m ON m.chat_id = c.id AND m.role = 'assistant'
+    LEFT JOIN eval_scores e ON e.message_id = m.id AND e.tone_score IS NOT NULL
+    WHERE 1=1 ${dateFilter}
+    GROUP BY c.id
+    ORDER BY c.created_at DESC
+    LIMIT ?
+  `).all(limit) as any[];
+}
+
+export function getConversationWithEvals(chatId: string) {
+  return getDb().prepare(`
+    SELECT
+      m.id as message_id,
+      m.role,
+      m.content,
+      m.flow_step,
+      m.media,
+      m.created_at,
+      e.tone_score,
+      e.flow_compliance,
+      e.length_compliance,
+      e.safety_pass,
+      e.contextual_relevance,
+      e.eval_reasoning,
+      e.error as eval_error
+    FROM messages m
+    LEFT JOIN eval_scores e ON e.message_id = m.id
+    WHERE m.chat_id = ?
+    ORDER BY m.created_at ASC
+  `).all(chatId) as any[];
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { insertRagChunk, getAllRagChunks, clearRagDocumentsBySource } from '@/lib/db';
-import { embedText } from '@/lib/rag';
+import { embedText, clearRagCache } from '@/lib/rag';
 
 // GET — list all RAG documents (grouped by source)
 export async function GET() {
@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
       insertRagChunk(title, source, idx, chunks[idx], embedding);
     }
 
+    clearRagCache();
     return NextResponse.json({ success: true, chunksCreated: chunks.length });
   } catch (err: any) {
     if (err.message === 'UNAUTHORIZED' || err.message === 'FORBIDDEN') {
@@ -81,6 +82,7 @@ export async function DELETE(req: NextRequest) {
     const { source } = await req.json();
     if (!source) return NextResponse.json({ error: 'source required' }, { status: 400 });
     clearRagDocumentsBySource(source);
+    clearRagCache();
     return NextResponse.json({ success: true });
   } catch (err: any) {
     if (err.message === 'UNAUTHORIZED' || err.message === 'FORBIDDEN') {

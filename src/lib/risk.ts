@@ -1,3 +1,5 @@
+import { getOpenRouter, EVAL_MODEL } from './llm';
+
 const RISK_KEYWORDS = [
   'suicid', 'kill myself', 'end my life', 'want to die', 'no reason to live',
   'hopeless', 'worthless', 'better off dead', 'can\'t go on', 'give up on life',
@@ -16,6 +18,47 @@ export function detectRisk(text: string): { triggered: boolean; triggerType: str
     }
   }
   return { triggered: false, triggerType: '', severity: '' };
+}
+
+/**
+ * LLM-based risk detection — catches nuanced distress that keywords miss.
+ * Runs async as a safety net; keyword check remains the synchronous gate.
+ */
+export async function detectRiskLLM(message: string): Promise<{ triggered: boolean; severity: string; reasoning: string }> {
+  try {
+    const client = getOpenRouter();
+    const completion = await client.chat.completions.create({
+      model: EVAL_MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: `You are a mental health risk assessor for a cancer fatigue support app. Analyze the user message for signs of:
+- Suicidal ideation (direct or indirect)
+- Self-harm intent
+- Severe hopelessness or despair beyond normal fatigue frustration
+- Expressions suggesting the person may be in danger
+
+Important: Cancer fatigue often causes frustration and low mood. Only flag messages that go BEYOND normal fatigue-related distress into territory requiring professional crisis support.
+
+Respond ONLY with valid JSON:
+{"triggered": true/false, "severity": "high"/"moderate"/"low", "reasoning": "one sentence"}`,
+        },
+        { role: 'user', content: message },
+      ],
+      max_tokens: 100,
+      temperature: 0,
+    });
+
+    const raw = completion.choices[0].message.content?.trim() ?? '{}';
+    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    return {
+      triggered: parsed.triggered === true,
+      severity: parsed.severity ?? 'moderate',
+      reasoning: parsed.reasoning ?? '',
+    };
+  } catch {
+    return { triggered: false, severity: '', reasoning: '' };
+  }
 }
 
 export const RISK_RESPONSE = `I hear how much you're struggling right now, and I want you to know that your pain is real and valid.

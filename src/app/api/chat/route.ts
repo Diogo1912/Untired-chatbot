@@ -6,10 +6,14 @@ import {
   getTodayChat, getCalendarChats, getUserStreak, getUserPreferences, getUserById,
 } from '@/lib/db';
 import { getOpenRouter, PRIMARY_MODEL, EVAL_MODEL, calculateCost } from '@/lib/llm';
-import { parseFlowState, getSystemPromptForStep, FlowStep } from '@/lib/flow';
-import { detectRisk, RISK_RESPONSE } from '@/lib/risk';
+import { parseFlowState, getSystemPromptForStep, FlowStep, CHECK_IN_OPTIONS } from '@/lib/flow';
+import { detectRisk, detectRiskLLM, RISK_RESPONSE } from '@/lib/risk';
 import { retrieveContext } from '@/lib/rag';
 import { runEval } from '@/lib/eval';
+import { checkRateLimit } from '@/lib/rateLimit';
+
+const VALID_CHECK_IN_IDS = new Set(CHECK_IN_OPTIONS.map(o => o.id));
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
 
@@ -184,7 +188,35 @@ async function generateQuickReplies(aiResponse: string, context: string): Promis
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth();
-    const { chatId, message, step, selections } = await req.json();
+    const body = await req.json();
+    let { chatId, message, step, selections } = body;
+
+    // ─── Input validation ──────────────────────────────────────────────
+    if (message !== undefined && message !== null) {
+      if (typeof message !== 'string') return NextResponse.json({ error: 'message must be a string' }, { status: 400 });
+      message = message.trim().slice(0, 2000);
+      if (!message) message = undefined;
+    }
+    if (step !== undefined && (typeof step !== 'number' || step < 0 || step > 4 || !Number.isInteger(step))) {
+      return NextResponse.json({ error: 'step must be an integer 0-4' }, { status: 400 });
+    }
+    if (selections !== undefined) {
+      if (!Array.isArray(selections) || selections.length > 3 || !selections.every((s: any) => typeof s === 'string' && VALID_CHECK_IN_IDS.has(s))) {
+        return NextResponse.json({ error: 'Invalid selections' }, { status: 400 });
+      }
+    }
+    if (chatId !== undefined && chatId !== null && (typeof chatId !== 'string' || !UUID_RE.test(chatId))) {
+      return NextResponse.json({ error: 'Invalid chatId format' }, { status: 400 });
+    }
+
+    // ─── Rate limiting ─────────────────────────────────────────────────
+    const rateCheck = checkRateLimit(user.id);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil((rateCheck.retryAfterMs ?? 60000) / 1000)) } },
+      );
+    }
 
     let chat = chatId ? getChatById(chatId) : null;
     if (!chat) {
@@ -206,6 +238,12 @@ export async function POST(req: NextRequest) {
         insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: flowState.step, model: PRIMARY_MODEL, tokensIn: 0, tokensOut: 0, latencyMs: 0, costUsd: 0, ragChunks: 0, riskTriggered: true });
         return NextResponse.json({ chatId: chat.id, response: RISK_RESPONSE, riskTriggered: true, step: flowState.step });
       }
+      // LLM risk detection runs in background as safety net (non-blocking)
+      detectRiskLLM(message).then(llmRisk => {
+        if (llmRisk.triggered) {
+          insertRiskEvent({ userId: user.id, chatId: chat.id, messageContent: message!, triggerType: 'llm_analysis', severity: llmRisk.severity });
+        }
+      }).catch(() => {});
     }
 
     // Step 0 → advance to step 1 (Acknowledgement)
@@ -213,7 +251,7 @@ export async function POST(req: NextRequest) {
       const newState = { step: 1 as FlowStep, userSelections: selections };
       updateChatStep(chat.id, 1, newState);
 
-      const { chunks, count } = await retrieveContext(selections.join(' '), 2);
+      const { chunks, count, topSimilarity } = await retrieveContext(selections.join(' '), 2);
       const systemPrompt = getSystemPromptForStep(1, selections, profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt);
       const { text, tokensIn, tokensOut, latencyMs } = await callLLM(
         systemPrompt, [{ role: 'user', content: `I selected: ${selections.join(', ')}` }], 300, false,
@@ -222,8 +260,8 @@ export async function POST(req: NextRequest) {
 
       const cost = calculateCost(PRIMARY_MODEL, tokensIn, tokensOut);
       const msgId = addMessage(chat.id, 'assistant', text, 1);
-      insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: 1, model: PRIMARY_MODEL, tokensIn, tokensOut, latencyMs, costUsd: cost, ragChunks: count, riskTriggered: false });
-      runEval(msgId, chat.id, text, 1).catch(() => {});
+      insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: 1, model: PRIMARY_MODEL, tokensIn, tokensOut, latencyMs, costUsd: cost, ragChunks: count, riskTriggered: false, ragTopSimilarity: topSimilarity });
+      runEval(msgId, chat.id, text, 1, `I selected: ${selections.join(', ')}`).catch(() => {});
 
       return NextResponse.json({ chatId: chat.id, response: text, step: 1, nextStep: 2, suggestions });
     }
@@ -236,7 +274,7 @@ export async function POST(req: NextRequest) {
 
       if (message) addMessage(chat.id, 'user', message, step as FlowStep);
 
-      const { chunks, count } = await retrieveContext(currentSelections.join(' ') + ' ' + (message ?? ''), 3);
+      const { chunks, count, topSimilarity } = await retrieveContext(currentSelections.join(' ') + ' ' + (message ?? ''), 3);
       const systemPrompt = getSystemPromptForStep(nextStep, currentSelections, profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt);
 
       const history = getChatMessages(chat.id).slice(-6).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
@@ -254,7 +292,7 @@ export async function POST(req: NextRequest) {
 
       updateChatStep(chat.id, nextStep, { ...currentState, step: nextStep });
       const msgId = addMessage(chat.id, 'assistant', text, nextStep, widget ?? undefined);
-      insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: nextStep, model: PRIMARY_MODEL, tokensIn, tokensOut, latencyMs, costUsd: cost, ragChunks: count, riskTriggered: false });
+      insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: nextStep, model: PRIMARY_MODEL, tokensIn, tokensOut, latencyMs, costUsd: cost, ragChunks: count, riskTriggered: false, ragTopSimilarity: topSimilarity });
 
       if (nextStep === 4) {
         markChatCompleted(chat.id);
@@ -262,7 +300,7 @@ export async function POST(req: NextRequest) {
           extractAndUpdateProfile(user.id, chat.id).catch(() => {});
         });
       }
-      runEval(msgId, chat.id, text, nextStep).catch(() => {});
+      runEval(msgId, chat.id, text, nextStep, message ?? undefined, history).catch(() => {});
 
       // Offer quick replies at steps 2 and 3 so user always actively responds
       const suggestions = (nextStep === 2 || nextStep === 3)
@@ -276,7 +314,7 @@ export async function POST(req: NextRequest) {
     if (message) {
       addMessage(chat.id, 'user', message, 4);
       const currentState = parseFlowState(chat.flow_state);
-      const { chunks, count } = await retrieveContext(message, 2);
+      const { chunks, count, topSimilarity } = await retrieveContext(message, 2);
       const systemPrompt = getSystemPromptForStep(3, currentState.userSelections ?? [], profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt);
       const history = getChatMessages(chat.id).slice(-8).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
@@ -284,8 +322,8 @@ export async function POST(req: NextRequest) {
       const cost = calculateCost(PRIMARY_MODEL, tokensIn, tokensOut);
 
       const msgId = addMessage(chat.id, 'assistant', text, 4, widget ?? undefined);
-      insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: 4, model: PRIMARY_MODEL, tokensIn, tokensOut, latencyMs, costUsd: cost, ragChunks: count, riskTriggered: false });
-      runEval(msgId, chat.id, text, 4).catch(() => {});
+      insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: 4, model: PRIMARY_MODEL, tokensIn, tokensOut, latencyMs, costUsd: cost, ragChunks: count, riskTriggered: false, ragTopSimilarity: topSimilarity });
+      runEval(msgId, chat.id, text, 4, message, history).catch(() => {});
 
       return NextResponse.json({ chatId: chat.id, response: text, widget, step: 4, completed: false });
     }
