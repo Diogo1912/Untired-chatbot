@@ -6,7 +6,7 @@ import {
   getTodayChat, getCalendarChats, getUserStreak, getUserPreferences, getUserById,
 } from '@/lib/db';
 import { getOpenRouter, PRIMARY_MODEL, EVAL_MODEL, calculateCost } from '@/lib/llm';
-import { parseFlowState, getSystemPromptForStep, FlowStep, CHECK_IN_OPTIONS } from '@/lib/flow';
+import { parseFlowState, getSystemPromptForStep, getFreeConversationPrompt, FlowStep, CHECK_IN_OPTIONS, Language } from '@/lib/flow';
 import { detectRisk, detectRiskLLM, RISK_RESPONSE } from '@/lib/risk';
 import { retrieveContext } from '@/lib/rag';
 import { runEval } from '@/lib/eval';
@@ -55,10 +55,36 @@ const COACHING_TOOLS = [
           },
           intro: {
             type: 'string',
-            description: 'One warm sentence explaining why this feature might help them.',
+            description: 'One sentence explaining why this feature might help them.',
           },
         },
         required: ['feature', 'intro'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'suggest_content_action',
+      description: 'Suggest a specific action from the Untire Now app to guide the user toward a concrete next step. Use this at steps 3-4 or in free conversation to steer toward action.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action_type: {
+            type: 'string',
+            enum: ['read_theme', 'do_exercise', 'adjust_goals', 'track_energy', 'relaxation'],
+            description: 'read_theme: read content about a topic in the app; do_exercise: physical activity suggestion; adjust_goals: review/update goals in the app; track_energy: use the Vase of Energy tool; relaxation: try a relaxation exercise',
+          },
+          theme: {
+            type: 'string',
+            description: 'The relevant Untire Now theme (e.g., "Voeding", "Slaap", "Pacing", "Fitness", "Stress", "Angst", "Grenzen")',
+          },
+          reason: {
+            type: 'string',
+            description: 'One sentence explaining why this action is relevant right now',
+          },
+        },
+        required: ['action_type', 'reason'],
       },
     },
   },
@@ -98,6 +124,9 @@ function resolveToolWidget(name: string, args: Record<string, any>): any | null 
   }
   if (name === 'suggest_app_feature') {
     return { type: 'app_feature', feature: args.feature, intro: args.intro };
+  }
+  if (name === 'suggest_content_action') {
+    return { type: 'content_action', actionType: args.action_type, theme: args.theme ?? null, reason: args.reason };
   }
   return null;
 }
@@ -153,15 +182,19 @@ async function callLLM(
 
 // ─── Quick reply generator ────────────────────────────────────────────────────
 
-async function generateQuickReplies(aiResponse: string, context: string): Promise<string[]> {
+async function generateQuickReplies(aiResponse: string, context: string, language: Language = 'nl'): Promise<string[]> {
   try {
     const client = getOpenRouter();
+    const langNote = language === 'nl' ? ' Write the options in Dutch.' : ' Write the options in English.';
+    const example = language === 'nl'
+      ? '["Ik heb veel moeite met slapen", "Ik wil het over grenzen hebben", "Dat herken ik"]'
+      : '["I\'ve been struggling with sleep a lot", "I want to talk about pacing myself", "That resonates with me"]';
     const res = await client.chat.completions.create({
       model: EVAL_MODEL,
       messages: [
         {
           role: 'system',
-          content: 'You help users navigate a cancer fatigue coaching conversation. Based on the AI coach\'s message, generate exactly 3 short follow-up options (max 8 words each) the user might say next. These should feel personal and help deepen the conversation — not generic. Return ONLY a valid JSON array of 3 strings, nothing else. Example: ["I\'ve been struggling with sleep a lot", "I want to talk about pacing myself", "That really resonates with me"]',
+          content: `You help users navigate a cancer fatigue coaching conversation. Based on the AI coach's message, generate exactly 3 short follow-up options (max 8 words each) the user might say next. These should feel personal and help deepen the conversation — not generic.${langNote} Return ONLY a valid JSON array of 3 strings, nothing else. Example: ${example}`,
         },
         {
           role: 'user',
@@ -227,6 +260,7 @@ export async function POST(req: NextRequest) {
     const profile = getProfile(user.id);
     const userPrefs = getUserPreferences(user.id);
     const customPrompt = userPrefs?.custom_prompt ?? '';
+    const language: Language = (userPrefs?.language === 'en' ? 'en' : 'nl');
 
     // Risk check on every user message
     if (message && typeof message === 'string') {
@@ -252,11 +286,11 @@ export async function POST(req: NextRequest) {
       updateChatStep(chat.id, 1, newState);
 
       const { chunks, count, topSimilarity } = await retrieveContext(selections.join(' '), 2);
-      const systemPrompt = getSystemPromptForStep(1, selections, profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt);
+      const systemPrompt = getSystemPromptForStep(1, selections, profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt, language);
       const { text, tokensIn, tokensOut, latencyMs } = await callLLM(
         systemPrompt, [{ role: 'user', content: `I selected: ${selections.join(', ')}` }], 300, false,
       );
-      const suggestions = await generateQuickReplies(text, selections.join(', '));
+      const suggestions = await generateQuickReplies(text, selections.join(', '), language);
 
       const cost = calculateCost(PRIMARY_MODEL, tokensIn, tokensOut);
       const msgId = addMessage(chat.id, 'assistant', text, 1);
@@ -275,7 +309,7 @@ export async function POST(req: NextRequest) {
       if (message) addMessage(chat.id, 'user', message, step as FlowStep);
 
       const { chunks, count, topSimilarity } = await retrieveContext(currentSelections.join(' ') + ' ' + (message ?? ''), 3);
-      const systemPrompt = getSystemPromptForStep(nextStep, currentSelections, profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt);
+      const systemPrompt = getSystemPromptForStep(nextStep, currentSelections, profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt, language);
 
       const history = getChatMessages(chat.id).slice(-6).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
       const inputMessages = [
@@ -304,7 +338,7 @@ export async function POST(req: NextRequest) {
 
       // Offer quick replies at steps 2 and 3 so user always actively responds
       const suggestions = (nextStep === 2 || nextStep === 3)
-        ? await generateQuickReplies(text, currentSelections.join(', '))
+        ? await generateQuickReplies(text, currentSelections.join(', '), language)
         : [];
 
       return NextResponse.json({ chatId: chat.id, response: text, widget, step: nextStep, completed: nextStep === 4, suggestions });
@@ -315,7 +349,7 @@ export async function POST(req: NextRequest) {
       addMessage(chat.id, 'user', message, 4);
       const currentState = parseFlowState(chat.flow_state);
       const { chunks, count, topSimilarity } = await retrieveContext(message, 2);
-      const systemPrompt = getSystemPromptForStep(3, currentState.userSelections ?? [], profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt);
+      const systemPrompt = getFreeConversationPrompt(currentState.userSelections ?? [], profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt, language);
       const history = getChatMessages(chat.id).slice(-8).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
       const { text, widget, tokensIn, tokensOut, latencyMs } = await callLLM(systemPrompt, history, 400, true);

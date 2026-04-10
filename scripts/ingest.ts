@@ -79,6 +79,41 @@ function slugify(name: string): string {
     .replace(/^-|-$/g, '');
 }
 
+// Map file title prefixes to clean Dutch theme names for display
+const THEME_MAP: Record<string, string> = {
+  'adjust': 'Verwerking',
+  'anxiety': 'Angst',
+  'boundaries': 'Grenzen',
+  'building': 'Opbouwen',
+  'cognitive': 'Cognitief functioneren',
+  'depression': 'Depressie',
+  'fatigue': 'Vermoeidheid',
+  'fitness': 'Fitness',
+  'instructions': 'Instructies',
+  'managing problems': 'Problemen aanpakken',
+  'managing your energy': 'Energie',
+  'nutrition': 'Voeding',
+  'or nl': 'Ontspanning & Rust',
+  'piekeren': 'Piekeren',
+  'pijn': 'Pijn',
+  'selfcare': 'Zelfzorg',
+  'slaap': 'Slaap',
+  'social': 'Sociaal netwerk',
+  'stress': 'Stress',
+  'tips': 'Tips',
+  'veerkracht': 'Veerkracht',
+  'verloren': 'Verloren voelen',
+  'work': 'Werk',
+};
+
+function extractThemeName(title: string): string | undefined {
+  const lower = title.toLowerCase();
+  for (const [prefix, theme] of Object.entries(THEME_MAP)) {
+    if (lower.startsWith(prefix)) return theme;
+  }
+  return undefined;
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function ingest() {
@@ -119,7 +154,8 @@ async function ingest() {
     const source = slugify(title);
 
     try {
-      process.stdout.write(`📄 ${title}\n`);
+      const themeName = extractThemeName(title);
+      process.stdout.write(`📄 ${title}${themeName ? ` [${themeName}]` : ''}\n`);
       const text = await extractText(filePath);
 
       if (text.trim().length < 50) {
@@ -133,7 +169,7 @@ async function ingest() {
 
       for (let i = 0; i < chunks.length; i++) {
         const embedding = await embedText(chunks[i]);
-        insertRagChunk(title, source, i, chunks[i], embedding);
+        insertRagChunk(title, source, i, chunks[i], embedding, themeName);
         process.stdout.write(`   chunk ${i + 1}/${chunks.length}\r`);
       }
 

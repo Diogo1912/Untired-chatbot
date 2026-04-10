@@ -158,6 +158,7 @@ function initSchema(db: Database.Database) {
       custom_prompt TEXT,
       show_breathing INTEGER DEFAULT 1,
       show_app_features INTEGER DEFAULT 1,
+      language TEXT DEFAULT 'nl',
       updated_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -193,6 +194,8 @@ function initSchema(db: Database.Database) {
     'ALTER TABLE eval_scores ADD COLUMN error TEXT',
     'ALTER TABLE eval_scores ADD COLUMN reviewed INTEGER DEFAULT 0',
     'ALTER TABLE llm_traces ADD COLUMN rag_top_similarity REAL',
+    "ALTER TABLE user_preferences ADD COLUMN language TEXT DEFAULT 'nl'",
+    'ALTER TABLE rag_documents ADD COLUMN theme_name TEXT',
   ];
   for (const m of migrations) {
     try { db.exec(m); } catch { /* column already exists */ }
@@ -320,11 +323,11 @@ export function getChatMessages(chatId: string) {
 
 // ─── RAG helpers ──────────────────────────────────────────────────────────────
 
-export function insertRagChunk(title: string, source: string, chunkIndex: number, chunkText: string, embedding: number[]) {
+export function insertRagChunk(title: string, source: string, chunkIndex: number, chunkText: string, embedding: number[], themeName?: string) {
   const id = randomUUID();
   getDb().prepare(
-    'INSERT INTO rag_documents (id, title, source, chunk_index, chunk_text, embedding) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(id, title, source, chunkIndex, chunkText, JSON.stringify(embedding));
+    'INSERT INTO rag_documents (id, title, source, chunk_index, chunk_text, embedding, theme_name) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, title, source, chunkIndex, chunkText, JSON.stringify(embedding), themeName ?? null);
 }
 
 export function getAllRagChunks() {
@@ -654,7 +657,7 @@ export function getUserPreferences(userId: string) {
   return getDb().prepare('SELECT * FROM user_preferences WHERE user_id = ?').get(userId) as any;
 }
 
-export function upsertUserPreferences(userId: string, data: { customPrompt?: string; showBreathing?: boolean; showAppFeatures?: boolean }) {
+export function upsertUserPreferences(userId: string, data: { customPrompt?: string; showBreathing?: boolean; showAppFeatures?: boolean; language?: string }) {
   const existing = getUserPreferences(userId);
   if (existing) {
     const sets: string[] = [];
@@ -662,14 +665,15 @@ export function upsertUserPreferences(userId: string, data: { customPrompt?: str
     if (data.customPrompt !== undefined) { sets.push('custom_prompt = ?'); vals.push(data.customPrompt); }
     if (data.showBreathing !== undefined) { sets.push('show_breathing = ?'); vals.push(data.showBreathing ? 1 : 0); }
     if (data.showAppFeatures !== undefined) { sets.push('show_app_features = ?'); vals.push(data.showAppFeatures ? 1 : 0); }
+    if (data.language !== undefined) { sets.push('language = ?'); vals.push(data.language); }
     if (sets.length) {
       sets.push("updated_at = datetime('now')");
       getDb().prepare(`UPDATE user_preferences SET ${sets.join(', ')} WHERE user_id = ?`).run(...vals, userId);
     }
   } else {
     getDb().prepare(
-      'INSERT INTO user_preferences (user_id, custom_prompt, show_breathing, show_app_features) VALUES (?, ?, ?, ?)'
-    ).run(userId, data.customPrompt ?? null, data.showBreathing !== false ? 1 : 0, data.showAppFeatures !== false ? 1 : 0);
+      'INSERT INTO user_preferences (user_id, custom_prompt, show_breathing, show_app_features, language) VALUES (?, ?, ?, ?, ?)'
+    ).run(userId, data.customPrompt ?? null, data.showBreathing !== false ? 1 : 0, data.showAppFeatures !== false ? 1 : 0, data.language ?? 'nl');
   }
   return getUserPreferences(userId);
 }

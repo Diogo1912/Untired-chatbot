@@ -15,7 +15,7 @@ function cosineSimilarity(a: number[], b: number[]): number {
 
 // ─── Embedding cache ──────────────────────────────────────────────────────────
 
-let cachedChunks: { chunk_text: string; title: string; embedding: number[] }[] | null = null;
+let cachedChunks: { chunk_text: string; title: string; theme_name: string | null; embedding: number[] }[] | null = null;
 let cacheTimestamp = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -53,6 +53,7 @@ export async function retrieveContext(query: string, topK = 3): Promise<{ chunks
     const scored = chunks.map(chunk => ({
       text: chunk.chunk_text,
       title: chunk.title,
+      themeName: chunk.theme_name,
       score: cosineSimilarity(queryEmbedding, chunk.embedding),
     }));
 
@@ -61,7 +62,10 @@ export async function retrieveContext(query: string, topK = 3): Promise<{ chunks
     const top = scored.slice(0, topK).filter(s => s.score > 0.3);
 
     return {
-      chunks: top.map(s => `[${s.title}]\n${s.text}`),
+      chunks: top.map(s => {
+        const label = s.themeName ? `[From: ${s.themeName} theme]` : `[${s.title}]`;
+        return `${label}\n${s.text}`;
+      }),
       count: top.length,
       topSimilarity,
     };

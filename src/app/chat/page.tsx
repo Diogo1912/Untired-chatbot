@@ -22,20 +22,98 @@ interface Preferences {
   customPrompt: string;
   showBreathing: boolean;
   showAppFeatures: boolean;
+  language: 'nl' | 'en';
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const CHECK_IN_OPTIONS = [
-  { id: 'very_tired', label: 'Very tired today' },
-  { id: 'some_energy', label: 'Some energy, not much' },
-  { id: 'ok_day', label: 'Having an okay day' },
-  { id: 'emotionally_heavy', label: 'Emotionally heavy' },
-  { id: 'anxious', label: 'Feeling anxious or restless' },
-  { id: 'hopeful', label: 'Feeling hopeful' },
-  { id: 'proud', label: 'Proud of something small' },
-  { id: 'struggling', label: 'Struggling to find motivation' },
+  { id: 'very_tired', label: 'Very tired today', labelNl: 'Heel moe vandaag' },
+  { id: 'some_energy', label: 'Some energy, not much', labelNl: 'Een beetje energie, niet veel' },
+  { id: 'ok_day', label: 'Having an okay day', labelNl: 'Gaat wel vandaag' },
+  { id: 'emotionally_heavy', label: 'Emotionally heavy', labelNl: 'Emotioneel zwaar' },
+  { id: 'anxious', label: 'Feeling anxious or restless', labelNl: 'Angstig of onrustig' },
+  { id: 'hopeful', label: 'Feeling hopeful', labelNl: 'Hoopvol' },
+  { id: 'proud', label: 'Proud of something small', labelNl: 'Trots op iets kleins' },
+  { id: 'struggling', label: 'Struggling to find motivation', labelNl: 'Moeite met motivatie' },
 ];
+
+// ─── UI Strings ─────────────────────────────────────────────────────────────
+
+const UI_STRINGS = {
+  nl: {
+    greeting_morning: 'Goedemorgen',
+    greeting_afternoon: 'Goedemiddag',
+    greeting_evening: 'Goedenavond',
+    check_in_title: 'Hoe voel je je vandaag?',
+    check_in_subtitle: 'Kies tot 3 opties',
+    check_in_button: 'Ga verder',
+    input_placeholder: 'Typ je bericht...',
+    send: 'Verstuur',
+    today: 'Vandaag',
+    yesterday: 'Gisteren',
+    settings_title: 'Instellingen',
+    settings_context_label: 'Persoonlijke context voor de coach',
+    settings_context_desc: 'Deel wat helpt om je beter te begrijpen — je situatie, voorkeuren, of wat je fijn vindt.',
+    settings_context_placeholder: 'bijv. Ik vind korte, directe berichten fijner. Ik ga om met vermoeidheid na borstkankerbehandeling...',
+    settings_interactive: 'Interactieve elementen',
+    settings_breathing: 'Ademhalingsoefeningen',
+    settings_breathing_desc: 'Geanimeerde ademhalingsgidsen tijdens sessies',
+    settings_app_features: 'App-suggesties',
+    settings_app_features_desc: 'Kaarten met Untire Now functies',
+    settings_language: 'Taal',
+    settings_language_desc: 'Taal van de coach en interface',
+    cancel: 'Annuleren',
+    save: 'Opslaan',
+    saving: 'Opslaan...',
+    available_in_app: 'Beschikbaar in Untire Now',
+    action_read_theme: 'Lees in de app',
+    action_do_exercise: 'Probeer deze oefening',
+    action_adjust_goals: 'Bekijk je doelen',
+    action_track_energy: 'Vat van Energie',
+    action_relaxation: 'Ontspanningsoefening',
+  },
+  en: {
+    greeting_morning: 'Good morning',
+    greeting_afternoon: 'Good afternoon',
+    greeting_evening: 'Good evening',
+    check_in_title: 'How are you feeling today?',
+    check_in_subtitle: 'Choose up to 3 options',
+    check_in_button: 'Continue',
+    input_placeholder: 'Type your message...',
+    send: 'Send',
+    today: 'Today',
+    yesterday: 'Yesterday',
+    settings_title: 'Customise',
+    settings_context_label: 'Custom context for the coach',
+    settings_context_desc: 'Share anything that helps the coach understand you better — your situation, preferences, or what you find helpful.',
+    settings_context_placeholder: 'e.g. I find short, direct messages more helpful. I am managing fatigue after breast cancer treatment...',
+    settings_interactive: 'Interactive elements',
+    settings_breathing: 'Breathing exercises',
+    settings_breathing_desc: 'Animated breathing guides during sessions',
+    settings_app_features: 'App feature suggestions',
+    settings_app_features_desc: 'Cards suggesting Untire Now features',
+    settings_language: 'Language',
+    settings_language_desc: 'Coach and interface language',
+    cancel: 'Cancel',
+    save: 'Save',
+    saving: 'Saving...',
+    available_in_app: 'Available in Untire Now',
+    action_read_theme: 'Read in the app',
+    action_do_exercise: 'Try this exercise',
+    action_adjust_goals: 'Review your goals',
+    action_track_energy: 'Vase of Energy',
+    action_relaxation: 'Relaxation exercise',
+  },
+} as const;
+
+const CONTENT_ACTION_LABELS: Record<string, { icon: string }> = {
+  read_theme: { icon: '📖' },
+  do_exercise: { icon: '🏃' },
+  adjust_goals: { icon: '🎯' },
+  track_energy: { icon: '⚡' },
+  relaxation: { icon: '🧘' },
+};
 
 const APP_FEATURE_DETAILS: Record<string, { icon: string; label: string; description: string }> = {
   energy_map: {
@@ -112,11 +190,12 @@ function generateCalendarDays(calendarChats: Chat[], userJoinedAt: string | null
   return days;
 }
 
-function getGreeting(): string {
+function getGreeting(lang: 'nl' | 'en' = 'nl'): string {
   const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
+  const s = UI_STRINGS[lang];
+  if (h < 12) return s.greeting_morning;
+  if (h < 18) return s.greeting_afternoon;
+  return s.greeting_evening;
 }
 
 // ─── Widgets ─────────────────────────────────────────────────────────────────
@@ -202,6 +281,32 @@ function AppFeatureWidget({ feature, intro }: { feature: string; intro: string }
   );
 }
 
+function ContentActionWidget({ actionType, theme, reason, lang = 'nl' }: { actionType: string; theme?: string; reason: string; lang?: 'nl' | 'en' }) {
+  const s = UI_STRINGS[lang];
+  const actionLabel = s[`action_${actionType}` as keyof typeof s] ?? actionType;
+  const meta = CONTENT_ACTION_LABELS[actionType] ?? { icon: '💡' };
+
+  return (
+    <div className="mt-2 rounded-xl border border-surface-muted bg-white shadow-sm overflow-hidden">
+      <div className="px-4 pt-3 pb-1">
+        <p className="text-xs text-gray-500 leading-relaxed">{reason}</p>
+      </div>
+      <div className="flex items-center gap-3 px-4 py-3">
+        <div className="w-9 h-9 rounded-lg bg-brand-yellow/30 flex items-center justify-center flex-shrink-0 border border-brand-yellow/50">
+          <span className="text-base">{meta.icon}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-800">{actionLabel as string}</p>
+          {theme && <p className="text-xs text-gray-400 mt-0.5">{theme}</p>}
+        </div>
+      </div>
+      <div className="px-4 pb-3">
+        <p className="text-xs text-gray-300 text-right">{s.available_in_app}</p>
+      </div>
+    </div>
+  );
+}
+
 function TypingIndicator() {
   return (
     <div className="flex items-end gap-2">
@@ -249,6 +354,9 @@ function MessageBubble({ message, showWidgets = true }: { message: Message; show
         )}
         {showWidgets && !isUser && media?.type === 'app_feature' && (
           <AppFeatureWidget feature={media.feature} intro={media.intro} />
+        )}
+        {showWidgets && !isUser && media?.type === 'content_action' && (
+          <ContentActionWidget actionType={media.actionType} theme={media.theme} reason={media.reason} />
         )}
       </div>
     </div>
@@ -679,7 +787,7 @@ function CustomiseModal({
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h2 className="text-sm font-semibold text-gray-900">Customise</h2>
+          <h2 className="text-sm font-semibold text-gray-900">{UI_STRINGS[form.language].settings_title}</h2>
           <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-surface flex items-center justify-center">
             <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -689,26 +797,44 @@ function CustomiseModal({
 
         <div className="px-5 py-5 space-y-5">
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">Custom context for the coach</label>
+            <p className="text-xs font-semibold text-gray-700 mb-3">{UI_STRINGS[form.language].settings_language}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setForm(f => ({ ...f, language: 'nl' }))}
+                className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-colors ${form.language === 'nl' ? 'bg-brand-purple text-white border-brand-purple' : 'border-gray-200 text-gray-600 hover:bg-surface'}`}
+              >
+                Nederlands
+              </button>
+              <button
+                onClick={() => setForm(f => ({ ...f, language: 'en' }))}
+                className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-colors ${form.language === 'en' ? 'bg-brand-purple text-white border-brand-purple' : 'border-gray-200 text-gray-600 hover:bg-surface'}`}
+              >
+                English
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5">{UI_STRINGS[form.language].settings_context_label}</label>
             <p className="text-xs text-gray-400 mb-2 leading-relaxed">
-              Share anything that helps the coach understand you better — your situation, preferences, or what you find helpful.
+              {UI_STRINGS[form.language].settings_context_desc}
             </p>
             <textarea
               value={form.customPrompt}
               onChange={e => setForm(f => ({ ...f, customPrompt: e.target.value }))}
-              placeholder="e.g. I find short, direct messages more helpful. I am managing fatigue after breast cancer treatment..."
+              placeholder={UI_STRINGS[form.language].settings_context_placeholder}
               rows={5}
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-surface text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-brand-purple/20 focus:border-brand-purple placeholder:text-gray-300"
             />
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-gray-700 mb-3">Interactive elements</p>
+            <p className="text-xs font-semibold text-gray-700 mb-3">{UI_STRINGS[form.language].settings_interactive}</p>
             <div className="space-y-2">
               <label className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:bg-surface cursor-pointer">
                 <div>
-                  <p className="text-xs font-medium text-gray-700">Breathing exercises</p>
-                  <p className="text-xs text-gray-400">Animated breathing guides during sessions</p>
+                  <p className="text-xs font-medium text-gray-700">{UI_STRINGS[form.language].settings_breathing}</p>
+                  <p className="text-xs text-gray-400">{UI_STRINGS[form.language].settings_breathing_desc}</p>
                 </div>
                 <button
                   onClick={() => setForm(f => ({ ...f, showBreathing: !f.showBreathing }))}
@@ -719,8 +845,8 @@ function CustomiseModal({
               </label>
               <label className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:bg-surface cursor-pointer">
                 <div>
-                  <p className="text-xs font-medium text-gray-700">App feature suggestions</p>
-                  <p className="text-xs text-gray-400">Cards suggesting Untire Now features</p>
+                  <p className="text-xs font-medium text-gray-700">{UI_STRINGS[form.language].settings_app_features}</p>
+                  <p className="text-xs text-gray-400">{UI_STRINGS[form.language].settings_app_features_desc}</p>
                 </div>
                 <button
                   onClick={() => setForm(f => ({ ...f, showAppFeatures: !f.showAppFeatures }))}
@@ -735,10 +861,10 @@ function CustomiseModal({
 
         <div className="px-5 pb-5 flex gap-2">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-xs font-medium text-gray-600 hover:bg-surface">
-            Cancel
+            {UI_STRINGS[form.language].cancel}
           </button>
           <button onClick={save} disabled={saving} className="flex-1 py-2.5 rounded-xl bg-brand-purple text-white text-xs font-semibold hover:bg-brand-purple-light disabled:opacity-50">
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? UI_STRINGS[form.language].saving : UI_STRINGS[form.language].save}
           </button>
         </div>
       </div>
@@ -786,7 +912,7 @@ export default function ChatPage() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showCustomise, setShowCustomise] = useState(false);
   const [showAboutMe, setShowAboutMe] = useState(false);
-  const [prefs, setPrefs] = useState<Preferences>({ customPrompt: '', showBreathing: true, showAppFeatures: true });
+  const [prefs, setPrefs] = useState<Preferences>({ customPrompt: '', showBreathing: true, showAppFeatures: true, language: 'nl' });
 
   // Copy confirmation
   const [copyConfirm, setCopyConfirm] = useState<string | null>(null);
@@ -833,7 +959,7 @@ export default function ChatPage() {
     });
 
     fetch('/api/preferences').then(r => r.json()).then(d => {
-      setPrefs({ customPrompt: d.customPrompt ?? '', showBreathing: d.showBreathing !== false, showAppFeatures: d.showAppFeatures !== false });
+      setPrefs({ customPrompt: d.customPrompt ?? '', showBreathing: d.showBreathing !== false, showAppFeatures: d.showAppFeatures !== false, language: d.language ?? 'nl' });
     }).catch(() => {});
   }, [user]);
 
@@ -1201,9 +1327,9 @@ export default function ChatPage() {
 
       <div className="flex-1 px-6 py-8 max-w-lg mx-auto w-full">
         <div className="mb-8">
-          <p className="text-sm text-gray-400 mb-1">{getGreeting()}, {user?.username}</p>
-          <h2 className="text-xl font-semibold text-gray-900 mb-1">How are you today?</h2>
-          <p className="text-xs text-gray-400">Select up to 3 that feel most true right now</p>
+          <p className="text-sm text-gray-400 mb-1">{getGreeting(prefs.language)}, {user?.username}</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-1">{UI_STRINGS[prefs.language].check_in_title}</h2>
+          <p className="text-xs text-gray-400">{UI_STRINGS[prefs.language].check_in_subtitle}</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-6">
@@ -1221,7 +1347,7 @@ export default function ChatPage() {
                 style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'forwards' }}
               >
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${selected ? 'bg-white' : 'bg-brand-purple/30'}`} />
-                {option.label}
+                {prefs.language === 'nl' ? option.labelNl : option.label}
               </button>
             );
           })}
@@ -1235,9 +1361,9 @@ export default function ChatPage() {
           {loading ? (
             <span className="flex items-center justify-center gap-2">
               <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Starting...
+              {prefs.language === 'nl' ? 'Even geduld...' : 'Starting...'}
             </span>
-          ) : `Continue${selections.length > 0 ? ` — ${selections.length} selected` : ''}`}
+          ) : `${UI_STRINGS[prefs.language].check_in_button}${selections.length > 0 ? ` — ${selections.length}` : ''}`}
         </button>
       </div>
     </div>
@@ -1314,7 +1440,7 @@ export default function ChatPage() {
               value={inputText}
               onChange={e => setInputText(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (inputText.trim()) sendMessage(); } }}
-              placeholder="Or type your own response..."
+              placeholder={prefs.language === 'nl' ? 'Of typ je eigen antwoord...' : 'Or type your own response...'}
               className="flex-1 px-3 py-2 rounded-xl border border-gray-200 bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple/20 focus:border-brand-purple"
             />
             {inputText.trim() && (

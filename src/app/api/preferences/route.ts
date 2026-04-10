@@ -10,6 +10,7 @@ export async function GET() {
       customPrompt: prefs?.custom_prompt ?? '',
       showBreathing: prefs?.show_breathing !== 0,
       showAppFeatures: prefs?.show_app_features !== 0,
+      language: prefs?.language ?? 'nl',
     });
   } catch (err: any) {
     if (err.message === 'UNAUTHORIZED') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -25,6 +26,7 @@ export async function PUT(req: NextRequest) {
       customPrompt: body.customPrompt,
       showBreathing: body.showBreathing,
       showAppFeatures: body.showAppFeatures,
+      language: body.language,
     });
     return NextResponse.json({ ok: true, prefs });
   } catch (err: any) {
