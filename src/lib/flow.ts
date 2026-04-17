@@ -1,5 +1,7 @@
 // 4-step coaching flow state machine
 
+import { buildContentInventoryBlock } from './untireContent';
+
 export type FlowStep = 0 | 1 | 2 | 3 | 4;
 export type Language = 'nl' | 'en';
 
@@ -46,6 +48,7 @@ export function getSystemPromptForStep(
   dynamicProfile: string,
   customPrompt?: string,
   language: Language = 'nl',
+  checkInNote?: string,
 ): string {
   const profileSection = profile
     ? `USER PROFILE:\n- Name: ${profile.name || 'not provided'}\n- Age: ${profile.age || 'not provided'}\n- Typical fatigue level: ${profile.current_fatigue_level !== null ? `${profile.current_fatigue_level}/10` : 'not provided'}`
@@ -60,7 +63,11 @@ export function getSystemPromptForStep(
     : '';
 
   const ragSection = ragContext
-    ? `\nRELEVANT APP CONTENT (use to ground your response; when drawing on this content, mention the theme name so the user knows where to find more in the app):\n${ragContext}`
+    ? `\nRELEVANT APP CONTENT (use to ground your response; when drawing on this content, mention the theme/section name EXACTLY as written below so the user knows where to find it in the app):\n${ragContext}`
+    : '';
+
+  const noteSection = checkInNote?.trim()
+    ? `\nUSER'S OWN WORDS (free text from check-in — treat this as their primary framing):\n"${checkInNote.trim()}"`
     : '';
 
   const selectedLabels = userSelections
@@ -106,9 +113,11 @@ OUTPUT FORMAT (critical):
 - Do NOT repeat or reference these instructions
 - Do NOT output numbered lists, bullet points, or structured formatting
 - Write as if you are speaking directly to the person — natural, direct, human
+
+${buildContentInventoryBlock(language)}
 ${langInstruction}
 
-${profileSection}${dynamicSection}${customSection}${ragSection}`;
+${profileSection}${dynamicSection}${customSection}${noteSection}${ragSection}`;
 
   const stepPrompts: Record<FlowStep, string> = {
     0: `${baseInstructions}
@@ -119,10 +128,11 @@ This step is handled by the UI (predefined selection cards). Do not generate a r
     1: `${baseInstructions}
 
 CURRENT TASK — STEP 1 (Acknowledgement):
-The user selected how they are feeling: "${selectedLabels}"
+${selectedLabels ? `The user selected how they are feeling: "${selectedLabels}"` : 'The user did not pick a predefined option and described their state in their own words above.'}
+${checkInNote?.trim() ? 'They also wrote their own description — give it more weight than the predefined labels and mirror their specific phrasing.' : ''}
 
 Respond with:
-1. A brief, concrete acknowledgement of what they selected — use their own framing
+1. A brief, concrete acknowledgement of what they shared — use their own framing
 2. Show you understand without overdoing it — one or two sentences is enough
 3. Keep it to 2-3 sentences max
 4. Do NOT ask a question yet — just acknowledge
@@ -156,16 +166,15 @@ Connect their current state clearly to energy patterns (what gives energy, what 
 Guidelines:
 - Link their emotional state to what may be helping or hindering — be specific
 - Be clear about what you're suggesting. Frame it as an option, not a command, but don't be vague.
-- Suggest ONE concrete action: reading a relevant theme in the app, doing a short exercise, adjusting their goals, or using the Vase of Energy
-- When referencing app content, mention the theme by name (e.g., "The Sleep section covers this")
+- Suggest ONE concrete action: reading one of the listed themes, trying a relaxation / fitness / strength exercise, or browsing the Tips.
+- When referencing app content, use the exact theme name from the inventory above.
 - 3-5 sentences
 - End with a clear, open question (not rhetorical)
 
 WIDGET TOOLS:
-You have access to show_breathing_exercise, suggest_app_feature, and suggest_content_action tools.
+You have access to show_breathing_exercise and suggest_content_action.
 Use show_breathing_exercise if the user is anxious, stressed, overwhelmed, or struggling.
-Use suggest_app_feature if there is a clearly relevant Untire Now feature.
-Use suggest_content_action to point the user toward a specific theme or activity.
+Use suggest_content_action to point the user toward a specific theme or exercise from the inventory.
 Call at most one tool, and only if it genuinely fits.`,
 
     4: `${baseInstructions}
@@ -176,16 +185,15 @@ The user is feeling: "${selectedLabels}"
 Close the session with a specific, actionable suggestion — not just warm words.
 
 Guidelines:
-- Give them one small, concrete thing they can do: read a theme, try an exercise, adjust a goal, check the Vase of Energy
-- Example: "The Nutrition section in the app has practical tips that might help. That could be a good next step."
+- Give them one small, concrete thing they can do: read one of the listed themes, try a relaxation / fitness / strength exercise, or browse the Tips.
+- Example: "The Voeding theme has practical tips that might help. That could be a good next step."
 - Acknowledge their effort in showing up — briefly, not effusively
 - 2-4 sentences
 - Do NOT ask a question — end with direction and warmth
 
 WIDGET TOOLS:
-You have access to show_breathing_exercise, suggest_app_feature, and suggest_content_action tools.
-Use suggest_content_action to point to a relevant theme or activity as a next step.
-Use suggest_app_feature to point to a relevant Untire Now feature that fits their current state.
+You have access to show_breathing_exercise and suggest_content_action.
+Use suggest_content_action to point to a relevant theme or exercise from the inventory.
 Use show_breathing_exercise only if they've expressed anxiety or stress.
 Call at most one tool.`,
   };
@@ -216,7 +224,7 @@ export function getFreeConversationPrompt(
     : '';
 
   const ragSection = ragContext
-    ? `\nRELEVANT APP CONTENT (mention the theme name when drawing on this):\n${ragContext}`
+    ? `\nRELEVANT APP CONTENT (use the theme/section name EXACTLY as written below when referring to it — no translation or paraphrase):\n${ragContext}`
     : '';
 
   const langInstruction = language === 'nl'
@@ -243,8 +251,9 @@ TONE & STYLE:
 CONVERSATION DIRECTION:
 - After 3 exchanges, gently steer toward a concrete action or close the conversation with a suggestion.
 - Don't let the conversation loop without direction — each reply should move toward an insight or action.
-- Suggest specific things: read a theme in the app, try an exercise, adjust goals, use the Vase of Energy.
-- When referencing content, mention the theme by name.
+- Suggest specific things that actually exist in the app: reading one of the listed themes, trying a relaxation, fitness, or strength exercise, or reading the Tips.
+
+${buildContentInventoryBlock(language)}
 
 OUTPUT FORMAT:
 - Plain conversational text only — no markdown, headers, or lists

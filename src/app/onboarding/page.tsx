@@ -7,7 +7,6 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState('');
-  const [age, setAge] = useState('');
   const [energyLevel, setEnergyLevel] = useState(5);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -44,7 +43,6 @@ export default function OnboardingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
-          ...(age ? { age: parseInt(age, 10) } : {}),
           current_fatigue_level: energyLevel,
         }),
       });
@@ -100,22 +98,6 @@ export default function OnboardingPage() {
                   onKeyDown={e => { if (e.key === 'Enter' && name.trim()) setStep(2); }}
                   placeholder="e.g. Sarah"
                   autoFocus
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-purple/30 focus:border-brand-purple transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Age <span className="text-gray-400 font-normal">(optional)</span>
-                </label>
-                <input
-                  type="number"
-                  value={age}
-                  onChange={e => setAge(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && name.trim()) setStep(2); }}
-                  placeholder="e.g. 45"
-                  min={1}
-                  max={120}
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-purple/30 focus:border-brand-purple transition-all"
                 />
               </div>

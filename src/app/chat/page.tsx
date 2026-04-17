@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface User { id: string; username: string; isAdmin: boolean; }
-interface Message { id: string; role: 'user' | 'assistant'; content: string; flow_step?: number; media?: any; }
+interface MessageFeedback { rating: 1 | -1; reason: string | null; }
+interface Message { id: string; role: 'user' | 'assistant'; content: string; flow_step?: number; media?: any; feedback?: MessageFeedback | null; }
 interface Chat { id: string; flow_step: number; flow_state: string; completed: number; created_at: string; }
 interface CalendarDay {
   date: string;
@@ -23,6 +24,13 @@ interface Preferences {
   showBreathing: boolean;
   showAppFeatures: boolean;
   language: 'nl' | 'en';
+  primaryModel: string;
+}
+
+interface AvailableModel {
+  id: string;
+  label: string;
+  description: string;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -59,19 +67,29 @@ const UI_STRINGS = {
     settings_interactive: 'Interactieve elementen',
     settings_breathing: 'Ademhalingsoefeningen',
     settings_breathing_desc: 'Geanimeerde ademhalingsgidsen tijdens sessies',
-    settings_app_features: 'App-suggesties',
-    settings_app_features_desc: 'Kaarten met Untire Now functies',
+    settings_app_features: 'Actiekaarten',
+    settings_app_features_desc: 'Kaarten die wijzen naar een thema of oefening in Untire Now',
     settings_language: 'Taal',
     settings_language_desc: 'Taal van de coach en interface',
+    settings_model: 'Model',
+    settings_model_desc: 'Kies welk AI-model de coach aandrijft.',
+    settings_model_experimental: 'Experimenteel — hogere kosten en latentie.',
+    fb_helpful: 'Was dit antwoord nuttig?',
+    fb_thanks_up: 'Bedankt voor je feedback',
+    fb_why_placeholder: 'Wat kon beter? (optioneel)',
+    fb_submit: 'Versturen',
+    fb_submitted: 'Bedankt — we nemen dit mee.',
+    intro_title: 'Hoi. Ik ben je coach binnen Untire.',
+    intro_body_1: 'Of je nu nieuwsgierig bent, even wil reflecteren, of niet precies weet hoe je verder wilt, ik help je een richting te vinden. Ik stel je een paar vragen, en samen zoeken we naar een klein, concreet handvat. Dat kan een inzicht zijn, een actie, of iets uit de app dat nu nuttig voor je is.',
+    intro_body_2: 'Onze gesprekken zijn kort en gericht, want lange gesprekken zonder richting kosten energie die je niet hebt.',
+    intro_closing: 'Hoe gaat het met je?',
     cancel: 'Annuleren',
     save: 'Opslaan',
     saving: 'Opslaan...',
     available_in_app: 'Beschikbaar in Untire Now',
-    action_read_theme: 'Lees in de app',
+    action_read_theme: 'Lees dit thema',
     action_do_exercise: 'Probeer deze oefening',
-    action_adjust_goals: 'Bekijk je doelen',
-    action_track_energy: 'Vat van Energie',
-    action_relaxation: 'Ontspanningsoefening',
+    action_read_tips: 'Bekijk de Tips',
   },
   en: {
     greeting_morning: 'Good morning',
@@ -91,51 +109,36 @@ const UI_STRINGS = {
     settings_interactive: 'Interactive elements',
     settings_breathing: 'Breathing exercises',
     settings_breathing_desc: 'Animated breathing guides during sessions',
-    settings_app_features: 'App feature suggestions',
-    settings_app_features_desc: 'Cards suggesting Untire Now features',
+    settings_app_features: 'Action cards',
+    settings_app_features_desc: 'Cards pointing to an Untire Now theme or exercise',
     settings_language: 'Language',
     settings_language_desc: 'Coach and interface language',
+    settings_model: 'Model',
+    settings_model_desc: 'Choose which AI model powers the coach.',
+    settings_model_experimental: 'Experimental — higher cost and latency.',
+    fb_helpful: 'Was this reply helpful?',
+    fb_thanks_up: 'Thanks for the feedback',
+    fb_why_placeholder: 'What could be better? (optional)',
+    fb_submit: 'Send',
+    fb_submitted: 'Thanks — we’ll take this on board.',
+    intro_title: 'Hi. I’m your coach within Untire.',
+    intro_body_1: 'Whether you’re feeling curious, want to reflect for a moment, or aren’t quite sure which way to go next, I’ll help you find a direction. I’ll ask you a few questions, and together we’ll look for a small, practical step to take. This could be an insight, an action, or something from the app that’s useful to you right now.',
+    intro_body_2: 'Our conversations are short and focused, because long, aimless chats take up energy you don’t have.',
+    intro_closing: 'How are you doing?',
     cancel: 'Cancel',
     save: 'Save',
     saving: 'Saving...',
     available_in_app: 'Available in Untire Now',
-    action_read_theme: 'Read in the app',
+    action_read_theme: 'Read this theme',
     action_do_exercise: 'Try this exercise',
-    action_adjust_goals: 'Review your goals',
-    action_track_energy: 'Vase of Energy',
-    action_relaxation: 'Relaxation exercise',
+    action_read_tips: 'Browse the Tips',
   },
 } as const;
 
 const CONTENT_ACTION_LABELS: Record<string, { icon: string }> = {
   read_theme: { icon: '📖' },
   do_exercise: { icon: '🏃' },
-  adjust_goals: { icon: '🎯' },
-  track_energy: { icon: '⚡' },
-  relaxation: { icon: '🧘' },
-};
-
-const APP_FEATURE_DETAILS: Record<string, { icon: string; label: string; description: string }> = {
-  energy_map: {
-    icon: 'E',
-    label: 'Energy Map',
-    description: 'Track how your energy shifts throughout the day and spot patterns over time.',
-  },
-  activity_planner: {
-    icon: 'A',
-    label: 'Activity Planner',
-    description: 'Schedule activities within your energy envelope — no boom and bust.',
-  },
-  pacing_guide: {
-    icon: 'P',
-    label: 'Pacing Guide',
-    description: 'Learn to balance rest and activity to gently build your stamina back.',
-  },
-  sleep_tracker: {
-    icon: 'S',
-    label: 'Sleep Tracker',
-    description: 'See how sleep quality connects to your fatigue levels the next day.',
-  },
+  read_tips: { icon: '💡' },
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -258,33 +261,31 @@ function BreathingWidget({ exercise, intro }: { exercise: any; intro: string }) 
   );
 }
 
-function AppFeatureWidget({ feature, intro }: { feature: string; intro: string }) {
-  const details = APP_FEATURE_DETAILS[feature] ?? APP_FEATURE_DETAILS.energy_map;
-  return (
-    <div className="mt-2 rounded-xl border border-surface-muted bg-white shadow-sm overflow-hidden">
-      <div className="px-4 pt-3 pb-1">
-        <p className="text-xs text-gray-500 leading-relaxed">{intro}</p>
-      </div>
-      <div className="flex items-center gap-3 px-4 py-3">
-        <div className="w-9 h-9 rounded-lg bg-surface flex items-center justify-center flex-shrink-0 border border-surface-muted">
-          <span className="text-xs font-bold text-brand-purple">{details.icon}</span>
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-800">{details.label}</p>
-          <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{details.description}</p>
-        </div>
-      </div>
-      <div className="px-4 pb-3">
-        <p className="text-xs text-gray-300 text-right">Available in Untire Now</p>
-      </div>
-    </div>
-  );
-}
-
-function ContentActionWidget({ actionType, theme, reason, lang = 'nl' }: { actionType: string; theme?: string; reason: string; lang?: 'nl' | 'en' }) {
+function ContentActionWidget({
+  actionType,
+  themeNameNl,
+  themeNameEn,
+  exerciseNameNl,
+  exerciseNameEn,
+  reason,
+  lang = 'nl',
+}: {
+  actionType: string;
+  themeNameNl?: string;
+  themeNameEn?: string;
+  exerciseNameNl?: string;
+  exerciseNameEn?: string;
+  reason: string;
+  lang?: 'nl' | 'en';
+}) {
   const s = UI_STRINGS[lang];
   const actionLabel = s[`action_${actionType}` as keyof typeof s] ?? actionType;
   const meta = CONTENT_ACTION_LABELS[actionType] ?? { icon: '💡' };
+  const contentName = actionType === 'read_theme'
+    ? (lang === 'nl' ? themeNameNl : themeNameEn)
+    : actionType === 'do_exercise'
+      ? (lang === 'nl' ? exerciseNameNl : exerciseNameEn)
+      : undefined;
 
   return (
     <div className="mt-2 rounded-xl border border-surface-muted bg-white shadow-sm overflow-hidden">
@@ -297,7 +298,7 @@ function ContentActionWidget({ actionType, theme, reason, lang = 'nl' }: { actio
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-800">{actionLabel as string}</p>
-          {theme && <p className="text-xs text-gray-400 mt-0.5">{theme}</p>}
+          {contentName && <p className="text-xs text-gray-400 mt-0.5">{contentName}</p>}
         </div>
       </div>
       <div className="px-4 pb-3">
@@ -326,7 +327,19 @@ function TypingIndicator() {
   );
 }
 
-function MessageBubble({ message, showWidgets = true }: { message: Message; showWidgets?: boolean }) {
+function MessageBubble({
+  message,
+  showWidgets = true,
+  language = 'nl',
+  onFeedback,
+  readOnly = false,
+}: {
+  message: Message;
+  showWidgets?: boolean;
+  language?: 'nl' | 'en';
+  onFeedback?: (messageId: string, rating: 1 | -1, reason: string | null) => Promise<void> | void;
+  readOnly?: boolean;
+}) {
   const isUser = message.role === 'user';
   const media = message.media;
 
@@ -352,13 +365,132 @@ function MessageBubble({ message, showWidgets = true }: { message: Message; show
         {showWidgets && !isUser && media?.type === 'breathing_exercise' && (
           <BreathingWidget exercise={media.exercise} intro={media.intro} />
         )}
-        {showWidgets && !isUser && media?.type === 'app_feature' && (
-          <AppFeatureWidget feature={media.feature} intro={media.intro} />
-        )}
         {showWidgets && !isUser && media?.type === 'content_action' && (
-          <ContentActionWidget actionType={media.actionType} theme={media.theme} reason={media.reason} />
+          <ContentActionWidget
+            actionType={media.actionType}
+            themeNameNl={media.themeNameNl}
+            themeNameEn={media.themeNameEn}
+            exerciseNameNl={media.exerciseNameNl}
+            exerciseNameEn={media.exerciseNameEn}
+            reason={media.reason}
+            lang={language}
+          />
+        )}
+        {!isUser && onFeedback && !readOnly && (
+          <MessageFeedbackControls
+            messageId={message.id}
+            initial={message.feedback ?? null}
+            language={language}
+            onSubmit={onFeedback}
+          />
         )}
       </div>
+    </div>
+  );
+}
+
+function MessageFeedbackControls({
+  messageId,
+  initial,
+  language,
+  onSubmit,
+}: {
+  messageId: string;
+  initial: MessageFeedback | null;
+  language: 'nl' | 'en';
+  onSubmit: (messageId: string, rating: 1 | -1, reason: string | null) => Promise<void> | void;
+}) {
+  const [rating, setRating] = useState<1 | -1 | null>(initial?.rating ?? null);
+  const [showReason, setShowReason] = useState(false);
+  const [reason, setReason] = useState(initial?.reason ?? '');
+  const [saving, setSaving] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const t = UI_STRINGS[language];
+
+  async function handleThumb(value: 1 | -1) {
+    if (saving) return;
+    setRating(value);
+    if (value === 1) {
+      setShowReason(false);
+      setSaving(true);
+      try {
+        await onSubmit(messageId, 1, null);
+        setSubmitted(true);
+      } finally {
+        setSaving(false);
+      }
+    } else {
+      // Thumbs down: open reason field; submit "rating only" immediately so we still capture the signal.
+      setShowReason(true);
+      setSaving(true);
+      try {
+        await onSubmit(messageId, -1, reason.trim() || null);
+      } finally {
+        setSaving(false);
+      }
+    }
+  }
+
+  async function submitReason() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onSubmit(messageId, -1, reason.trim() || null);
+      setSubmitted(true);
+      setShowReason(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-1 flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5 text-gray-400">
+        {!submitted && <span className="text-[11px]">{t.fb_helpful}</span>}
+        <button
+          type="button"
+          onClick={() => handleThumb(1)}
+          aria-label="thumbs up"
+          disabled={saving}
+          className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${rating === 1 ? 'bg-brand-teal/15 text-brand-teal' : 'hover:bg-surface hover:text-gray-600'}`}
+        >
+          <svg className="w-3.5 h-3.5" fill={rating === 1 ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M14 10V5a2 2 0 00-2-2l-3 9v10h9.5a2 2 0 002-1.7l1.4-8a2 2 0 00-2-2.3H14zM7 22H4a1 1 0 01-1-1v-9a1 1 0 011-1h3v11z" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={() => handleThumb(-1)}
+          aria-label="thumbs down"
+          disabled={saving}
+          className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${rating === -1 ? 'bg-red-50 text-red-500' : 'hover:bg-surface hover:text-gray-600'}`}
+        >
+          <svg className="w-3.5 h-3.5" fill={rating === -1 ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 14v5a2 2 0 002 2l3-9V2H5.5a2 2 0 00-2 1.7l-1.4 8a2 2 0 002 2.3H10zM17 2h3a1 1 0 011 1v9a1 1 0 01-1 1h-3V2z" />
+          </svg>
+        </button>
+        {submitted && rating === 1 && <span className="text-[11px] text-brand-teal">{t.fb_thanks_up}</span>}
+        {submitted && rating === -1 && <span className="text-[11px] text-gray-500">{t.fb_submitted}</span>}
+      </div>
+      {showReason && !submitted && (
+        <div className="flex flex-col gap-1.5">
+          <textarea
+            value={reason}
+            onChange={e => setReason(e.target.value.slice(0, 1000))}
+            placeholder={t.fb_why_placeholder}
+            rows={2}
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-xs text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-brand-purple/20 focus:border-brand-purple"
+          />
+          <button
+            type="button"
+            onClick={submitReason}
+            disabled={saving}
+            className="self-start px-3 py-1 rounded-lg bg-brand-purple text-white text-[11px] font-medium disabled:opacity-50"
+          >
+            {t.fb_submit}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -395,7 +527,6 @@ function DayEntry({
   let statusColor = 'bg-gray-200'; // no chat
   if (day.completed) statusColor = 'bg-brand-teal';
   else if (day.chatId && day.isToday) statusColor = 'bg-brand-purple/50'; // in progress today
-  else if (day.isSkipped) statusColor = 'bg-red-300';
 
   return (
     <div className={`group relative flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
@@ -404,7 +535,7 @@ function DayEntry({
       <button className="flex items-center gap-2.5 flex-1 min-w-0 text-left" onClick={onSelect}>
         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusColor}`} />
         <span className={`text-xs truncate ${
-          day.isSkipped ? 'text-red-400' : isSelected ? 'text-brand-purple font-medium' : 'text-gray-600'
+          isSelected ? 'text-brand-purple font-medium' : 'text-gray-600'
         }`}>
           {day.label}
         </span>
@@ -463,107 +594,6 @@ function DayEntry({
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-// ─── Calendar Modal ───────────────────────────────────────────────────────────
-
-function CalendarModal({
-  days,
-  onClose,
-  onSelectDay,
-}: {
-  days: CalendarDay[];
-  onClose: () => void;
-  onSelectDay: (date: string) => void;
-}) {
-  const today = getTodayStr();
-  const thisMonth = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-
-  // Build a month grid for the current month
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const offset = firstDay === 0 ? 6 : firstDay - 1; // Mon-first offset
-
-  const cells: (number | null)[] = [
-    ...Array(offset).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
-
-  function dayStatus(dayNum: number): 'completed' | 'skipped' | 'today' | 'future' | 'none' {
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-    if (dateStr > today) return 'future';
-    if (dateStr === today) return 'today';
-    const d = days.find(d => d.date === dateStr);
-    if (d?.completed) return 'completed';
-    if (!d?.chatId) return 'skipped';
-    return 'none';
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-fade-in">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h2 className="text-sm font-semibold text-gray-900">{thisMonth}</h2>
-          <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-surface flex items-center justify-center">
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="px-5 py-4">
-          <div className="grid grid-cols-7 mb-2">
-            {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => (
-              <div key={d} className="text-center text-xs font-medium text-gray-400 py-1">{d}</div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-y-1">
-            {cells.map((dayNum, i) => {
-              if (!dayNum) return <div key={i} />;
-              const status = dayStatus(dayNum);
-              const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-              const dayData = days.find(d => d.date === dateStr);
-
-              return (
-                <button
-                  key={i}
-                  disabled={status === 'future'}
-                  onClick={() => { if (dayData?.chatId) { onSelectDay(dateStr); onClose(); } }}
-                  className={`aspect-square flex items-center justify-center rounded-lg text-xs font-medium transition-colors mx-0.5 ${
-                    status === 'today' ? 'bg-brand-purple text-white' :
-                    status === 'completed' ? 'bg-brand-teal/20 text-brand-teal hover:bg-brand-teal/30 cursor-pointer' :
-                    status === 'skipped' ? 'text-red-400 hover:bg-red-50' :
-                    'text-gray-300 cursor-default'
-                  }`}
-                >
-                  {dayNum}
-                  {status === 'completed' && (
-                    <span className="sr-only">completed</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-4 mt-4 pt-4 border-t border-gray-100">
-            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-              <span className="w-2.5 h-2.5 rounded-full bg-brand-teal/50" />Completed
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-300/50" />Skipped
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-              <span className="w-2.5 h-2.5 rounded-full bg-brand-purple" />Today
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -760,10 +790,12 @@ function FactCard({ label, value, onDelete, deleting }: {
 
 function CustomiseModal({
   prefs,
+  availableModels,
   onClose,
   onSave,
 }: {
   prefs: Preferences;
+  availableModels: AvailableModel[];
   onClose: () => void;
   onSave: (p: Preferences) => void;
 }) {
@@ -796,6 +828,35 @@ function CustomiseModal({
         </div>
 
         <div className="px-5 py-5 space-y-5">
+          {availableModels.length > 1 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-700 mb-1">{UI_STRINGS[form.language].settings_model}</p>
+              <p className="text-xs text-gray-400 mb-3 leading-relaxed">{UI_STRINGS[form.language].settings_model_desc}</p>
+              <div className="space-y-2">
+                {availableModels.map((m, idx) => {
+                  const selected = form.primaryModel === m.id;
+                  const isExperimental = idx > 0;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => setForm(f => ({ ...f, primaryModel: m.id }))}
+                      className={`w-full text-left p-3 rounded-xl border transition-colors ${selected ? 'border-brand-purple bg-brand-purple/5' : 'border-gray-200 hover:bg-surface'}`}
+                    >
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-xs font-semibold text-gray-800">{m.label}</span>
+                        <span className={`w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 ${selected ? 'border-brand-purple bg-brand-purple' : 'border-gray-300'}`} />
+                      </div>
+                      <p className="text-xs text-gray-500 leading-relaxed">{m.description}</p>
+                      {isExperimental && (
+                        <p className="text-[10px] text-brand-purple mt-1 font-medium">{UI_STRINGS[form.language].settings_model_experimental}</p>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div>
             <p className="text-xs font-semibold text-gray-700 mb-3">{UI_STRINGS[form.language].settings_language}</p>
             <div className="flex gap-2">
@@ -887,6 +948,7 @@ export default function ChatPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const [sessionComplete, setSessionComplete] = useState(false);
   const [selections, setSelections] = useState<string[]>([]);
+  const [checkInNote, setCheckInNote] = useState('');
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [riskShown, setRiskShown] = useState(false);
@@ -894,7 +956,6 @@ export default function ChatPage() {
   // Sidebar / calendar
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [calendarChats, setCalendarChats] = useState<Chat[]>([]);
-  const [streak, setStreak] = useState(0);
   const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
   const [chatsCollapsed, setChatsCollapsed] = useState(false);
   const [userJoinedAt, setUserJoinedAt] = useState<string | null>(null);
@@ -909,10 +970,10 @@ export default function ChatPage() {
   const [viewDate, setViewDate] = useState<string | null>(null);
 
   // Modals
-  const [showCalendar, setShowCalendar] = useState(false);
   const [showCustomise, setShowCustomise] = useState(false);
   const [showAboutMe, setShowAboutMe] = useState(false);
-  const [prefs, setPrefs] = useState<Preferences>({ customPrompt: '', showBreathing: true, showAppFeatures: true, language: 'nl' });
+  const [prefs, setPrefs] = useState<Preferences>({ customPrompt: '', showBreathing: true, showAppFeatures: true, language: 'nl', primaryModel: '' });
+  const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
 
   // Copy confirmation
   const [copyConfirm, setCopyConfirm] = useState<string | null>(null);
@@ -941,7 +1002,6 @@ export default function ChatPage() {
       const cc: Chat[] = d.calendarChats ?? [];
       const joinedAt: string | null = d.userJoinedAt ?? null;
       setCalendarChats(cc);
-      setStreak(d.streak ?? 0);
       setUserJoinedAt(joinedAt);
       setCalendarDays(generateCalendarDays(cc, joinedAt));
 
@@ -959,7 +1019,14 @@ export default function ChatPage() {
     });
 
     fetch('/api/preferences').then(r => r.json()).then(d => {
-      setPrefs({ customPrompt: d.customPrompt ?? '', showBreathing: d.showBreathing !== false, showAppFeatures: d.showAppFeatures !== false, language: d.language ?? 'nl' });
+      setPrefs({
+        customPrompt: d.customPrompt ?? '',
+        showBreathing: d.showBreathing !== false,
+        showAppFeatures: d.showAppFeatures !== false,
+        language: d.language ?? 'nl',
+        primaryModel: d.primaryModel ?? d.defaultModel ?? '',
+      });
+      if (Array.isArray(d.availableModels)) setAvailableModels(d.availableModels);
     }).catch(() => {});
   }, [user]);
 
@@ -989,7 +1056,6 @@ export default function ChatPage() {
     const cc: Chat[] = d.calendarChats ?? [];
     const joinedAt: string | null = d.userJoinedAt ?? userJoinedAt;
     setCalendarChats(cc);
-    setStreak(d.streak ?? 0);
     setCalendarDays(generateCalendarDays(cc, joinedAt));
   }
 
@@ -1034,22 +1100,36 @@ export default function ChatPage() {
     }
   }
 
+  // Per-message feedback
+  const submitFeedback = useCallback(async (messageId: string, rating: 1 | -1, reason: string | null) => {
+    try {
+      await fetch('/api/chat/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId, rating, reason }),
+      });
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, feedback: { rating, reason } } : m));
+    } catch { /* silent — user can retry */ }
+  }, []);
+
   // Check-in flow
   function toggleSelection(id: string) {
     setSelections(prev => prev.includes(id) ? prev.filter(s => s !== id) : prev.length < 3 ? [...prev, id] : prev);
   }
 
   async function sendSelections() {
-    if (selections.length === 0 || loading) return;
+    const note = checkInNote.trim();
+    if ((selections.length === 0 && !note) || loading) return;
     setLoading(true);
     const selectionText = selections.map(id => CHECK_IN_OPTIONS.find(o => o.id === id)?.label ?? id).join(', ');
-    setMessages([{ id: Date.now().toString(), role: 'user', content: selectionText }]);
+    const displayText = [selectionText, note].filter(Boolean).join(' — ');
+    setMessages([{ id: Date.now().toString(), role: 'user', content: displayText }]);
     setCurrentStep(1);
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: chat?.id, step: 0, selections }),
+        body: JSON.stringify({ chatId: chat?.id, step: 0, selections, checkInNote: note || undefined }),
       });
       const data = await res.json();
       if (data.riskTriggered) setRiskShown(true);
@@ -1058,7 +1138,7 @@ export default function ChatPage() {
         setChat(newChat);
       }
       if (data.response) {
-        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.response, media: data.widget ?? null }]);
+        setMessages(prev => [...prev, { id: data.messageId ?? (Date.now() + 1).toString(), role: 'assistant', content: data.response, media: data.widget ?? null }]);
       }
       // Stay at step 1 — user must pick a suggestion (no auto-advance)
       setCurrentStep(1);
@@ -1079,7 +1159,7 @@ export default function ChatPage() {
       });
       const data = await res.json();
       if (data.response) {
-        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: data.response, media: data.widget ?? null }]);
+        setMessages(prev => [...prev, { id: data.messageId ?? Date.now().toString(), role: 'assistant', content: data.response, media: data.widget ?? null }]);
       }
       setCurrentStep(data.step);
       setSuggestions(data.suggestions ?? []);
@@ -1105,7 +1185,7 @@ export default function ChatPage() {
       const data = await res.json();
       if (data.riskTriggered) setRiskShown(true);
       if (data.response) {
-        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.response, media: data.widget ?? null }]);
+        setMessages(prev => [...prev, { id: data.messageId ?? (Date.now() + 1).toString(), role: 'assistant', content: data.response, media: data.widget ?? null }]);
       }
       setCurrentStep(data.step ?? currentStep);
       setSuggestions(data.suggestions ?? []);
@@ -1130,7 +1210,7 @@ export default function ChatPage() {
       const data = await res.json();
       if (data.riskTriggered) setRiskShown(true);
       if (data.response) {
-        setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.response, media: data.widget ?? null }]);
+        setMessages(prev => [...prev, { id: data.messageId ?? (Date.now() + 1).toString(), role: 'assistant', content: data.response, media: data.widget ?? null }]);
       }
       setCurrentStep(data.step ?? currentStep);
       setSuggestions(data.suggestions ?? []);
@@ -1169,35 +1249,17 @@ export default function ChatPage() {
       fixed md:relative z-30 top-0 left-0 transition-transform duration-300
       ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
     `}>
-      {/* Streak */}
-      <div className="px-5 pt-6 pb-4 border-b border-gray-100">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Current streak</span>
-          <button className="md:hidden w-6 h-6 flex items-center justify-center rounded" onClick={() => setSidebarOpen(false)}>
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div className="flex items-baseline gap-1">
-          <span className="text-4xl font-bold text-gray-900">{streak}</span>
-          <span className="text-sm text-gray-400 font-medium">{streak === 1 ? 'day' : 'days'}</span>
-        </div>
-        {streak === 0 && <p className="text-xs text-gray-400 mt-1">Complete today's session to start your streak</p>}
-        {streak > 0 && <p className="text-xs text-gray-400 mt-1">Keep it going</p>}
+      {/* Mobile close button */}
+      <div className="flex items-center justify-end px-3 pt-4 md:hidden">
+        <button className="w-6 h-6 flex items-center justify-center rounded" onClick={() => setSidebarOpen(false)}>
+          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
       {/* Nav items */}
       <div className="px-3 py-3 border-b border-gray-100">
-        <button
-          onClick={() => { setSidebarOpen(false); setShowCalendar(true); }}
-          className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-xs font-medium text-gray-600 hover:bg-surface transition-colors"
-        >
-          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          Calendar
-        </button>
         <button
           onClick={() => { setSidebarOpen(false); setShowCustomise(true); }}
           className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-xs font-medium text-gray-600 hover:bg-surface transition-colors"
@@ -1301,7 +1363,7 @@ export default function ChatPage() {
         ) : viewMessages.length === 0 ? (
           <p className="text-center text-xs text-gray-400 pt-10">No messages in this session.</p>
         ) : (
-          viewMessages.map(msg => <MessageBubble key={msg.id} message={msg} showWidgets={prefs.showBreathing && prefs.showAppFeatures} />)
+          viewMessages.map(msg => <MessageBubble key={msg.id} message={msg} showWidgets={prefs.showBreathing && prefs.showAppFeatures} language={prefs.language} onFeedback={submitFeedback} />)
         )}
       </div>
 
@@ -1326,6 +1388,15 @@ export default function ChatPage() {
       </div>
 
       <div className="flex-1 px-6 py-8 max-w-lg mx-auto w-full">
+        {calendarChats.length === 0 && messages.length === 0 && (
+          <div className="mb-8 p-5 rounded-2xl bg-brand-purple-pale/60 border border-brand-purple/10">
+            <h3 className="text-base font-semibold text-gray-900 mb-2">{UI_STRINGS[prefs.language].intro_title}</h3>
+            <p className="text-sm text-gray-700 leading-relaxed mb-2">{UI_STRINGS[prefs.language].intro_body_1}</p>
+            <p className="text-sm text-gray-700 leading-relaxed mb-3">{UI_STRINGS[prefs.language].intro_body_2}</p>
+            <p className="text-sm font-medium text-brand-purple">{UI_STRINGS[prefs.language].intro_closing}</p>
+          </div>
+        )}
+
         <div className="mb-8">
           <p className="text-sm text-gray-400 mb-1">{getGreeting(prefs.language)}, {user?.username}</p>
           <h2 className="text-xl font-semibold text-gray-900 mb-1">{UI_STRINGS[prefs.language].check_in_title}</h2>
@@ -1353,9 +1424,19 @@ export default function ChatPage() {
           })}
         </div>
 
+        <div className="mb-4">
+          <textarea
+            value={checkInNote}
+            onChange={e => setCheckInNote(e.target.value.slice(0, 500))}
+            placeholder={prefs.language === 'nl' ? 'Of schrijf in je eigen woorden hoe je je voelt (optioneel)...' : 'Or describe in your own words how you feel (optional)...'}
+            rows={3}
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-brand-purple/20 focus:border-brand-purple transition-all"
+          />
+        </div>
+
         <button
           onClick={sendSelections}
-          disabled={selections.length === 0 || loading}
+          disabled={(selections.length === 0 && !checkInNote.trim()) || loading}
           className="w-full py-3.5 rounded-xl bg-brand-purple text-white font-semibold text-sm hover:bg-brand-purple-light active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-brand-purple/20"
         >
           {loading ? (
@@ -1414,6 +1495,8 @@ export default function ChatPage() {
             key={msg.id}
             message={msg}
             showWidgets={prefs.showBreathing || prefs.showAppFeatures}
+            language={prefs.language}
+            onFeedback={submitFeedback}
           />
         ))}
         {loading && <TypingIndicator />}
@@ -1507,22 +1590,11 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Calendar modal */}
-      {showCalendar && (
-        <CalendarModal
-          days={calendarDays}
-          onClose={() => setShowCalendar(false)}
-          onSelectDay={date => {
-            const day = calendarDays.find(d => d.date === date);
-            if (day?.chatId) openDayView(day.chatId, date);
-          }}
-        />
-      )}
-
       {/* Customise modal */}
       {showCustomise && (
         <CustomiseModal
           prefs={prefs}
+          availableModels={availableModels}
           onClose={() => setShowCustomise(false)}
           onSave={setPrefs}
         />

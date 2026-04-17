@@ -159,6 +159,7 @@ function initSchema(db: Database.Database) {
       show_breathing INTEGER DEFAULT 1,
       show_app_features INTEGER DEFAULT 1,
       language TEXT DEFAULT 'nl',
+      primary_model TEXT,
       updated_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -171,6 +172,21 @@ function initSchema(db: Database.Database) {
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS message_feedback (
+      id TEXT PRIMARY KEY,
+      message_id TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL,
+      chat_id TEXT,
+      rating INTEGER NOT NULL,
+      reason TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_message_feedback_chat_id ON message_feedback(chat_id);
+    CREATE INDEX IF NOT EXISTS idx_message_feedback_rating ON message_feedback(rating);
 
     CREATE TABLE IF NOT EXISTS profile_facts (
       id TEXT PRIMARY KEY,
@@ -195,6 +211,7 @@ function initSchema(db: Database.Database) {
     'ALTER TABLE eval_scores ADD COLUMN reviewed INTEGER DEFAULT 0',
     'ALTER TABLE llm_traces ADD COLUMN rag_top_similarity REAL',
     "ALTER TABLE user_preferences ADD COLUMN language TEXT DEFAULT 'nl'",
+    'ALTER TABLE user_preferences ADD COLUMN primary_model TEXT',
     'ALTER TABLE rag_documents ADD COLUMN theme_name TEXT',
   ];
   for (const m of migrations) {
@@ -317,8 +334,38 @@ export function addMessage(chatId: string, role: string, content: string, flowSt
 }
 
 export function getChatMessages(chatId: string) {
-  const rows = getDb().prepare('SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC').all(chatId) as any[];
-  return rows.map(r => ({ ...r, media: r.media ? JSON.parse(r.media) : null }));
+  const rows = getDb().prepare(`
+    SELECT m.*, f.rating AS feedback_rating, f.reason AS feedback_reason
+    FROM messages m
+    LEFT JOIN message_feedback f ON f.message_id = m.id
+    WHERE m.chat_id = ?
+    ORDER BY m.created_at ASC
+  `).all(chatId) as any[];
+  return rows.map(r => ({
+    ...r,
+    media: r.media ? JSON.parse(r.media) : null,
+    feedback: r.feedback_rating != null ? { rating: r.feedback_rating, reason: r.feedback_reason ?? null } : null,
+  }));
+}
+
+// ─── Message feedback helpers ─────────────────────────────────────────────────
+
+export function upsertMessageFeedback(messageId: string, userId: string, chatId: string | null, rating: 1 | -1, reason: string | null) {
+  const existing = getDb().prepare('SELECT id FROM message_feedback WHERE message_id = ?').get(messageId) as any;
+  if (existing) {
+    getDb().prepare(
+      "UPDATE message_feedback SET rating = ?, reason = ?, updated_at = datetime('now') WHERE message_id = ?"
+    ).run(rating, reason, messageId);
+  } else {
+    getDb().prepare(
+      'INSERT INTO message_feedback (id, message_id, user_id, chat_id, rating, reason) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(randomUUID(), messageId, userId, chatId, rating, reason);
+  }
+  return getDb().prepare('SELECT * FROM message_feedback WHERE message_id = ?').get(messageId) as any;
+}
+
+export function getMessageById(messageId: string) {
+  return getDb().prepare('SELECT * FROM messages WHERE id = ?').get(messageId) as any;
 }
 
 // ─── RAG helpers ──────────────────────────────────────────────────────────────
@@ -657,7 +704,7 @@ export function getUserPreferences(userId: string) {
   return getDb().prepare('SELECT * FROM user_preferences WHERE user_id = ?').get(userId) as any;
 }
 
-export function upsertUserPreferences(userId: string, data: { customPrompt?: string; showBreathing?: boolean; showAppFeatures?: boolean; language?: string }) {
+export function upsertUserPreferences(userId: string, data: { customPrompt?: string; showBreathing?: boolean; showAppFeatures?: boolean; language?: string; primaryModel?: string | null }) {
   const existing = getUserPreferences(userId);
   if (existing) {
     const sets: string[] = [];
@@ -666,14 +713,15 @@ export function upsertUserPreferences(userId: string, data: { customPrompt?: str
     if (data.showBreathing !== undefined) { sets.push('show_breathing = ?'); vals.push(data.showBreathing ? 1 : 0); }
     if (data.showAppFeatures !== undefined) { sets.push('show_app_features = ?'); vals.push(data.showAppFeatures ? 1 : 0); }
     if (data.language !== undefined) { sets.push('language = ?'); vals.push(data.language); }
+    if (data.primaryModel !== undefined) { sets.push('primary_model = ?'); vals.push(data.primaryModel); }
     if (sets.length) {
       sets.push("updated_at = datetime('now')");
       getDb().prepare(`UPDATE user_preferences SET ${sets.join(', ')} WHERE user_id = ?`).run(...vals, userId);
     }
   } else {
     getDb().prepare(
-      'INSERT INTO user_preferences (user_id, custom_prompt, show_breathing, show_app_features, language) VALUES (?, ?, ?, ?, ?)'
-    ).run(userId, data.customPrompt ?? null, data.showBreathing !== false ? 1 : 0, data.showAppFeatures !== false ? 1 : 0, data.language ?? 'nl');
+      'INSERT INTO user_preferences (user_id, custom_prompt, show_breathing, show_app_features, language, primary_model) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(userId, data.customPrompt ?? null, data.showBreathing !== false ? 1 : 0, data.showAppFeatures !== false ? 1 : 0, data.language ?? 'nl', data.primaryModel ?? null);
   }
   return getUserPreferences(userId);
 }
@@ -745,22 +793,44 @@ export function getAdminStats() {
 // ─── Per-user analytics ──────────────────────────────────────────────────────
 
 export function getAllUserAnalytics() {
+  // Chat aggregates, trace costs, and eval scores each come from their own
+  // subquery. Joining them together in one FROM clause inflates numbers by
+  // the cross-product of traces × assistant messages per chat.
   return getDb().prepare(`
     SELECT
       u.id, u.username, u.created_at as joined_at,
-      COUNT(DISTINCT c.id) as total_sessions,
-      SUM(CASE WHEN c.completed = 1 THEN 1 ELSE 0 END) as completed_sessions,
-      COALESCE(SUM(t.cost_usd), 0) as total_cost,
-      AVG(e.tone_score) as avg_tone,
-      SUM(CASE WHEN e.safety_pass = 0 THEN 1 ELSE 0 END) as safety_fails,
-      MAX(c.created_at) as last_active
+      COALESCE(ch.total_sessions, 0) as total_sessions,
+      COALESCE(ch.completed_sessions, 0) as completed_sessions,
+      COALESCE(ch.last_active, u.created_at) as last_active,
+      COALESCE(tr.total_cost, 0) as total_cost,
+      ev.avg_tone as avg_tone,
+      COALESCE(ev.safety_fails, 0) as safety_fails
     FROM users u
-    LEFT JOIN chats c ON c.user_id = u.id
-    LEFT JOIN llm_traces t ON t.chat_id = c.id
-    LEFT JOIN messages m ON m.chat_id = c.id AND m.role = 'assistant'
-    LEFT JOIN eval_scores e ON e.message_id = m.id AND e.tone_score IS NOT NULL
+    LEFT JOIN (
+      SELECT user_id,
+             COUNT(*) as total_sessions,
+             SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) as completed_sessions,
+             MAX(created_at) as last_active
+      FROM chats
+      GROUP BY user_id
+    ) ch ON ch.user_id = u.id
+    LEFT JOIN (
+      SELECT c.user_id, SUM(t.cost_usd) as total_cost
+      FROM llm_traces t
+      INNER JOIN chats c ON c.id = t.chat_id
+      GROUP BY c.user_id
+    ) tr ON tr.user_id = u.id
+    LEFT JOIN (
+      SELECT c.user_id,
+             AVG(e.tone_score) as avg_tone,
+             SUM(CASE WHEN e.safety_pass = 0 THEN 1 ELSE 0 END) as safety_fails
+      FROM eval_scores e
+      INNER JOIN messages m ON m.id = e.message_id
+      INNER JOIN chats c ON c.id = m.chat_id
+      WHERE e.tone_score IS NOT NULL
+      GROUP BY c.user_id
+    ) ev ON ev.user_id = u.id
     WHERE u.is_admin = 0
-    GROUP BY u.id
     ORDER BY last_active DESC
   `).all() as any[];
 }

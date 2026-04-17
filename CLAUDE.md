@@ -32,6 +32,14 @@ SESSION_SECRET=           # Random string
 NODE_ENV=development
 ```
 
+Users can toggle between **Claude Sonnet 4.5** (default) and **Claude Opus 4.7**
+via the Customise modal. The selection is per-user, stored on
+`user_preferences.primary_model`, and applied to every chat turn + logged in
+`llm_traces.model` so costs and quality can be compared per model.
+
+Opus pricing defaults to $15/$75 per 1M tokens (input/output) and can be
+overridden via `OPUS_COST_INPUT` / `OPUS_COST_OUTPUT`.
+
 ---
 
 ## Stack

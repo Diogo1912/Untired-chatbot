@@ -5,8 +5,9 @@ import {
   updateChatStep, markChatCompleted, getProfile, insertTrace, insertRiskEvent,
   getTodayChat, getCalendarChats, getUserStreak, getUserPreferences, getUserById,
 } from '@/lib/db';
-import { getOpenRouter, PRIMARY_MODEL, EVAL_MODEL, calculateCost } from '@/lib/llm';
+import { getOpenRouter, PRIMARY_MODEL, EVAL_MODEL, calculateCost, resolveModel } from '@/lib/llm';
 import { parseFlowState, getSystemPromptForStep, getFreeConversationPrompt, FlowStep, CHECK_IN_OPTIONS, Language } from '@/lib/flow';
+import { UNTIRE_THEME_IDS, UNTIRE_THEMES, UNTIRE_EXERCISE_IDS, UNTIRE_EXERCISES, scrubFabricatedContent } from '@/lib/untireContent';
 import { detectRisk, detectRiskLLM, RISK_RESPONSE } from '@/lib/risk';
 import { retrieveContext } from '@/lib/rag';
 import { runEval } from '@/lib/eval';
@@ -43,45 +44,29 @@ const COACHING_TOOLS = [
   {
     type: 'function',
     function: {
-      name: 'suggest_app_feature',
-      description: 'Show a card suggesting a relevant Untire Now app feature. Use when a specific feature would directly help the user with what they are experiencing.',
-      parameters: {
-        type: 'object',
-        properties: {
-          feature: {
-            type: 'string',
-            enum: ['energy_map', 'activity_planner', 'pacing_guide', 'sleep_tracker'],
-            description: 'energy_map: for tracking energy patterns; activity_planner: for scheduling within energy limits; pacing_guide: for balancing rest/activity; sleep_tracker: for sleep-fatigue connection',
-          },
-          intro: {
-            type: 'string',
-            description: 'One sentence explaining why this feature might help them.',
-          },
-        },
-        required: ['feature', 'intro'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
       name: 'suggest_content_action',
-      description: 'Suggest a specific action from the Untire Now app to guide the user toward a concrete next step. Use this at steps 3-4 or in free conversation to steer toward action.',
+      description: 'Point the user to a specific theme or exercise that actually exists in the Untire Now app. Use at steps 3-4 or in free conversation to steer toward a concrete next step. Never invent a theme or exercise id — only use values from the enums below.',
       parameters: {
         type: 'object',
         properties: {
           action_type: {
             type: 'string',
-            enum: ['read_theme', 'do_exercise', 'adjust_goals', 'track_energy', 'relaxation'],
-            description: 'read_theme: read content about a topic in the app; do_exercise: physical activity suggestion; adjust_goals: review/update goals in the app; track_energy: use the Vase of Energy tool; relaxation: try a relaxation exercise',
+            enum: ['read_theme', 'do_exercise', 'read_tips'],
+            description: 'read_theme: direct them to one of the 17 themes to read; do_exercise: direct them to one of the exercise categories; read_tips: direct them to the Tips section',
           },
-          theme: {
+          theme_id: {
             type: 'string',
-            description: 'The relevant Untire Now theme (e.g., "Voeding", "Slaap", "Pacing", "Fitness", "Stress", "Angst", "Grenzen")',
+            enum: UNTIRE_THEME_IDS as unknown as string[],
+            description: 'Required when action_type = read_theme. The stable id of a theme from the authoritative inventory.',
+          },
+          exercise_id: {
+            type: 'string',
+            enum: UNTIRE_EXERCISE_IDS as unknown as string[],
+            description: 'Required when action_type = do_exercise. The stable id of an exercise category from the authoritative inventory.',
           },
           reason: {
             type: 'string',
-            description: 'One sentence explaining why this action is relevant right now',
+            description: 'One sentence explaining why this action is relevant right now. Do not describe features that are not listed.',
           },
         },
         required: ['action_type', 'reason'],
@@ -122,11 +107,21 @@ function resolveToolWidget(name: string, args: Record<string, any>): any | null 
     const pattern = BREATHING_PATTERNS[args.type] ?? BREATHING_PATTERNS.coherent;
     return { type: 'breathing_exercise', exercise: pattern, intro: args.intro };
   }
-  if (name === 'suggest_app_feature') {
-    return { type: 'app_feature', feature: args.feature, intro: args.intro };
-  }
   if (name === 'suggest_content_action') {
-    return { type: 'content_action', actionType: args.action_type, theme: args.theme ?? null, reason: args.reason };
+    const actionType = args.action_type;
+    if (!['read_theme', 'do_exercise', 'read_tips'].includes(actionType)) return null;
+
+    if (actionType === 'read_theme') {
+      const theme = UNTIRE_THEMES.find(t => t.id === args.theme_id);
+      if (!theme) return null; // reject hallucinated ids rather than rendering them
+      return { type: 'content_action', actionType, themeId: theme.id, themeNameNl: theme.nameNl, themeNameEn: theme.nameEn, reason: args.reason };
+    }
+    if (actionType === 'do_exercise') {
+      const ex = UNTIRE_EXERCISES.find(e => e.id === args.exercise_id);
+      if (!ex) return null;
+      return { type: 'content_action', actionType, exerciseId: ex.id, exerciseNameNl: ex.nameNl, exerciseNameEn: ex.nameEn, reason: args.reason };
+    }
+    return { type: 'content_action', actionType, reason: args.reason };
   }
   return null;
 }
@@ -138,6 +133,8 @@ async function callLLM(
   conversationMessages: { role: string; content: string }[],
   maxTokens: number,
   useTools: boolean,
+  model: string = PRIMARY_MODEL,
+  language: Language = 'nl',
 ): Promise<{
   text: string;
   widget: any | null;
@@ -149,7 +146,7 @@ async function callLLM(
   const start = Date.now();
 
   const completion = await client.chat.completions.create({
-    model: PRIMARY_MODEL,
+    model,
     messages: [
       { role: 'system', content: systemPrompt },
       ...conversationMessages,
@@ -160,7 +157,13 @@ async function callLLM(
   });
 
   const choice = completion.choices[0];
-  const text = choice.message.content ?? '';
+  const rawText = choice.message.content ?? '';
+  const { scrubbed, hits } = scrubFabricatedContent(rawText, language);
+  if (hits.length > 0) {
+    // Visible in server logs so we can quantify how often the model tries to
+    // name nonexistent content. If this keeps firing, tighten the prompts.
+    console.warn('[untire-content] scrubbed fabricated terms:', hits);
+  }
   let widget: any = null;
 
   if (useTools && choice.message.tool_calls?.length) {
@@ -172,7 +175,7 @@ async function callLLM(
   }
 
   return {
-    text,
+    text: scrubbed,
     widget,
     tokensIn: completion.usage?.prompt_tokens ?? 0,
     tokensOut: completion.usage?.completion_tokens ?? 0,
@@ -222,7 +225,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth();
     const body = await req.json();
-    let { chatId, message, step, selections } = body;
+    let { chatId, message, step, selections, checkInNote } = body;
 
     // ─── Input validation ──────────────────────────────────────────────
     if (message !== undefined && message !== null) {
@@ -237,6 +240,11 @@ export async function POST(req: NextRequest) {
       if (!Array.isArray(selections) || selections.length > 3 || !selections.every((s: any) => typeof s === 'string' && VALID_CHECK_IN_IDS.has(s))) {
         return NextResponse.json({ error: 'Invalid selections' }, { status: 400 });
       }
+    }
+    if (checkInNote !== undefined && checkInNote !== null) {
+      if (typeof checkInNote !== 'string') return NextResponse.json({ error: 'checkInNote must be a string' }, { status: 400 });
+      checkInNote = checkInNote.trim().slice(0, 500);
+      if (!checkInNote) checkInNote = undefined;
     }
     if (chatId !== undefined && chatId !== null && (typeof chatId !== 'string' || !UUID_RE.test(chatId))) {
       return NextResponse.json({ error: 'Invalid chatId format' }, { status: 400 });
@@ -261,6 +269,7 @@ export async function POST(req: NextRequest) {
     const userPrefs = getUserPreferences(user.id);
     const customPrompt = userPrefs?.custom_prompt ?? '';
     const language: Language = (userPrefs?.language === 'en' ? 'en' : 'nl');
+    const activeModel = resolveModel(userPrefs?.primary_model);
 
     // Risk check on every user message
     if (message && typeof message === 'string') {
@@ -269,8 +278,8 @@ export async function POST(req: NextRequest) {
         insertRiskEvent({ userId: user.id, chatId: chat.id, messageContent: message, triggerType: risk.triggerType, severity: risk.severity });
         addMessage(chat.id, 'user', message, flowState.step);
         const msgId = addMessage(chat.id, 'assistant', RISK_RESPONSE, flowState.step);
-        insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: flowState.step, model: PRIMARY_MODEL, tokensIn: 0, tokensOut: 0, latencyMs: 0, costUsd: 0, ragChunks: 0, riskTriggered: true });
-        return NextResponse.json({ chatId: chat.id, response: RISK_RESPONSE, riskTriggered: true, step: flowState.step });
+        insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: flowState.step, model: activeModel, tokensIn: 0, tokensOut: 0, latencyMs: 0, costUsd: 0, ragChunks: 0, riskTriggered: true });
+        return NextResponse.json({ chatId: chat.id, response: RISK_RESPONSE, messageId: msgId, riskTriggered: true, step: flowState.step });
       }
       // LLM risk detection runs in background as safety net (non-blocking)
       detectRiskLLM(message).then(llmRisk => {
@@ -280,24 +289,32 @@ export async function POST(req: NextRequest) {
       }).catch(() => {});
     }
 
-    // Step 0 → advance to step 1 (Acknowledgement)
-    if (step === 0 && selections?.length > 0) {
-      const newState = { step: 1 as FlowStep, userSelections: selections };
+    // Step 0 → advance to step 1 (Acknowledgement). Accept selections, a free-text note, or both.
+    if (step === 0 && ((selections?.length ?? 0) > 0 || checkInNote)) {
+      const sel = selections ?? [];
+      const newState: any = { step: 1 as FlowStep, userSelections: sel };
+      if (checkInNote) newState.checkInNote = checkInNote;
       updateChatStep(chat.id, 1, newState);
 
-      const { chunks, count, topSimilarity } = await retrieveContext(selections.join(' '), 2);
-      const systemPrompt = getSystemPromptForStep(1, selections, profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt, language);
+      // Log user side of the exchange so it's visible in history / transcripts
+      const userVisible = [sel.length ? `I selected: ${sel.join(', ')}` : '', checkInNote ? `In my own words: ${checkInNote}` : '']
+        .filter(Boolean).join('\n');
+      addMessage(chat.id, 'user', userVisible, 0);
+
+      const retrievalQuery = [sel.join(' '), checkInNote ?? ''].filter(Boolean).join(' ');
+      const { chunks, count, topSimilarity } = await retrieveContext(retrievalQuery, 2);
+      const systemPrompt = getSystemPromptForStep(1, sel, profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt, language, checkInNote);
       const { text, tokensIn, tokensOut, latencyMs } = await callLLM(
-        systemPrompt, [{ role: 'user', content: `I selected: ${selections.join(', ')}` }], 300, false,
+        systemPrompt, [{ role: 'user', content: userVisible }], 300, false, activeModel, language,
       );
-      const suggestions = await generateQuickReplies(text, selections.join(', '), language);
+      const suggestions = await generateQuickReplies(text, [sel.join(', '), checkInNote ?? ''].filter(Boolean).join(' — '), language);
 
-      const cost = calculateCost(PRIMARY_MODEL, tokensIn, tokensOut);
+      const cost = calculateCost(activeModel, tokensIn, tokensOut);
       const msgId = addMessage(chat.id, 'assistant', text, 1);
-      insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: 1, model: PRIMARY_MODEL, tokensIn, tokensOut, latencyMs, costUsd: cost, ragChunks: count, riskTriggered: false, ragTopSimilarity: topSimilarity });
-      runEval(msgId, chat.id, text, 1, `I selected: ${selections.join(', ')}`).catch(() => {});
+      insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: 1, model: activeModel, tokensIn, tokensOut, latencyMs, costUsd: cost, ragChunks: count, riskTriggered: false, ragTopSimilarity: topSimilarity });
+      runEval(msgId, chat.id, text, 1, userVisible).catch(() => {});
 
-      return NextResponse.json({ chatId: chat.id, response: text, step: 1, nextStep: 2, suggestions });
+      return NextResponse.json({ chatId: chat.id, response: text, messageId: msgId, step: 1, nextStep: 2, suggestions });
     }
 
     // Steps 1→4: advance flow
@@ -308,8 +325,9 @@ export async function POST(req: NextRequest) {
 
       if (message) addMessage(chat.id, 'user', message, step as FlowStep);
 
+      const storedNote = (currentState as any).checkInNote as string | undefined;
       const { chunks, count, topSimilarity } = await retrieveContext(currentSelections.join(' ') + ' ' + (message ?? ''), 3);
-      const systemPrompt = getSystemPromptForStep(nextStep, currentSelections, profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt, language);
+      const systemPrompt = getSystemPromptForStep(nextStep, currentSelections, profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt, language, storedNote);
 
       const history = getChatMessages(chat.id).slice(-6).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
       const inputMessages = [
@@ -321,12 +339,12 @@ export async function POST(req: NextRequest) {
       const useTools = nextStep >= 3;
       const maxTokens = nextStep === 2 ? 250 : 350;
 
-      const { text, widget, tokensIn, tokensOut, latencyMs } = await callLLM(systemPrompt, inputMessages, maxTokens, useTools);
-      const cost = calculateCost(PRIMARY_MODEL, tokensIn, tokensOut);
+      const { text, widget, tokensIn, tokensOut, latencyMs } = await callLLM(systemPrompt, inputMessages, maxTokens, useTools, activeModel, language);
+      const cost = calculateCost(activeModel, tokensIn, tokensOut);
 
       updateChatStep(chat.id, nextStep, { ...currentState, step: nextStep });
       const msgId = addMessage(chat.id, 'assistant', text, nextStep, widget ?? undefined);
-      insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: nextStep, model: PRIMARY_MODEL, tokensIn, tokensOut, latencyMs, costUsd: cost, ragChunks: count, riskTriggered: false, ragTopSimilarity: topSimilarity });
+      insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: nextStep, model: activeModel, tokensIn, tokensOut, latencyMs, costUsd: cost, ragChunks: count, riskTriggered: false, ragTopSimilarity: topSimilarity });
 
       if (nextStep === 4) {
         markChatCompleted(chat.id);
@@ -341,7 +359,7 @@ export async function POST(req: NextRequest) {
         ? await generateQuickReplies(text, currentSelections.join(', '), language)
         : [];
 
-      return NextResponse.json({ chatId: chat.id, response: text, widget, step: nextStep, completed: nextStep === 4, suggestions });
+      return NextResponse.json({ chatId: chat.id, response: text, messageId: msgId, widget, step: nextStep, completed: nextStep === 4, suggestions });
     }
 
     // Free conversation after session
@@ -352,14 +370,14 @@ export async function POST(req: NextRequest) {
       const systemPrompt = getFreeConversationPrompt(currentState.userSelections ?? [], profile, chunks.join('\n\n'), profile?.dynamic_profile ?? '', customPrompt, language);
       const history = getChatMessages(chat.id).slice(-8).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
-      const { text, widget, tokensIn, tokensOut, latencyMs } = await callLLM(systemPrompt, history, 400, true);
-      const cost = calculateCost(PRIMARY_MODEL, tokensIn, tokensOut);
+      const { text, widget, tokensIn, tokensOut, latencyMs } = await callLLM(systemPrompt, history, 400, true, activeModel, language);
+      const cost = calculateCost(activeModel, tokensIn, tokensOut);
 
       const msgId = addMessage(chat.id, 'assistant', text, 4, widget ?? undefined);
-      insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: 4, model: PRIMARY_MODEL, tokensIn, tokensOut, latencyMs, costUsd: cost, ragChunks: count, riskTriggered: false, ragTopSimilarity: topSimilarity });
+      insertTrace({ userId: user.id, chatId: chat.id, messageId: msgId, flowStep: 4, model: activeModel, tokensIn, tokensOut, latencyMs, costUsd: cost, ragChunks: count, riskTriggered: false, ragTopSimilarity: topSimilarity });
       runEval(msgId, chat.id, text, 4, message, history).catch(() => {});
 
-      return NextResponse.json({ chatId: chat.id, response: text, widget, step: 4, completed: false });
+      return NextResponse.json({ chatId: chat.id, response: text, messageId: msgId, widget, step: 4, completed: false });
     }
 
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
