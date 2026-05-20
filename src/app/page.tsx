@@ -25,7 +25,7 @@ export default function LoginPage() {
         setError(data.error ?? 'Login failed');
         return;
       }
-      router.push(data.user.isAdmin ? '/admin' : '/chat');
+      router.push('/hub');
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {

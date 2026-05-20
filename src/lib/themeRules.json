@@ -1,0 +1,262 @@
+{
+  "engineVersion": "v1",
+  "tagCatalog": {
+    "energyIn": [
+      { "id": "being_outside",        "labelNl": "Buiten zijn",                    "labelEn": "Being outside" },
+      { "id": "movement",             "labelNl": "Bewegen",                        "labelEn": "Movement / exercise" },
+      { "id": "social_contact",       "labelNl": "Sociaal contact",                "labelEn": "Social contact" },
+      { "id": "rest_and_sleep",       "labelNl": "Rust en slaap",                  "labelEn": "Rest and sleep" },
+      { "id": "creative_activities",  "labelNl": "Creatieve activiteiten",         "labelEn": "Creative activities" },
+      { "id": "time_alone",           "labelNl": "Tijd voor mezelf",               "labelEn": "Time alone" },
+      { "id": "healthy_food",         "labelNl": "Gezond eten",                    "labelEn": "Healthy food" },
+      { "id": "meaningful_work",      "labelNl": "Betekenisvol werk",              "labelEn": "Meaningful work" }
+    ],
+    "energyCosts": [
+      { "id": "caring_for_others",    "labelNl": "Zorgen voor anderen",            "labelEn": "Caring for others" },
+      { "id": "too_much_to_do",       "labelNl": "Te veel moeten doen",            "labelEn": "Having to do too much" },
+      { "id": "work_pressure",        "labelNl": "Werkdruk",                       "labelEn": "Work pressure" },
+      { "id": "physical_complaints",  "labelNl": "Lichamelijke klachten",          "labelEn": "Physical complaints" },
+      { "id": "pain",                 "labelNl": "Pijn",                           "labelEn": "Pain" },
+      { "id": "poor_sleep",           "labelNl": "Slecht slapen",                  "labelEn": "Poor sleep" },
+      { "id": "appointments",         "labelNl": "Afspraken in het ziekenhuis",    "labelEn": "Hospital appointments" }
+    ],
+    "energyLeaks": [
+      { "id": "no_time_for_myself",   "labelNl": "Geen tijd voor mezelf",          "labelEn": "No time for myself" },
+      { "id": "worrying",             "labelNl": "Piekeren",                       "labelEn": "Worrying" },
+      { "id": "anxiety_feelings",     "labelNl": "Angstige gevoelens",             "labelEn": "Anxious feelings" },
+      { "id": "low_mood",             "labelNl": "Sombere stemming",               "labelEn": "Low mood" },
+      { "id": "saying_yes_too_much",  "labelNl": "Te vaak ja zeggen",              "labelEn": "Saying yes too often" },
+      { "id": "lost_feeling",         "labelNl": "Verloren voelen",                "labelEn": "Feeling lost" },
+      { "id": "racing_thoughts",      "labelNl": "Onrustig hoofd",                 "labelEn": "Racing thoughts" },
+      { "id": "concentration_issues", "labelNl": "Moeite met concentratie",        "labelEn": "Concentration issues" },
+      { "id": "loneliness",           "labelNl": "Eenzaamheid",                    "labelEn": "Loneliness" },
+      { "id": "stressful_relationships","labelNl": "Spanningen in relaties",       "labelEn": "Tense relationships" }
+    ]
+  },
+  "thresholds": {
+    "minScore": 0.18,
+    "topN": 2,
+    "fallbackThemeId": "introduction"
+  },
+  "themes": [
+    {
+      "themeId": "managing_energy",
+      "signals": {
+        "energyLeakTags":   [{ "tag": "no_time_for_myself", "weight": 3 }, { "tag": "saying_yes_too_much", "weight": 2 }],
+        "energyCostTags":   [{ "tag": "too_much_to_do", "weight": 3 }, { "tag": "caring_for_others", "weight": 2 }, { "tag": "work_pressure", "weight": 2 }],
+        "energyInTags":     [{ "tag": "rest_and_sleep", "weight": 1 }, { "tag": "time_alone", "weight": 1 }],
+        "goalKeywords":     [{ "pattern": "energie|energy|reserve|retain|behoud|balans|balance|pacing", "weight": 4 }],
+        "scoreRules": [
+          { "metric": "energy", "op": "gapBelowDesired", "thresholdPct": 30, "weight": 3 },
+          { "metric": "fatigue", "op": "gapAboveAcceptable", "thresholdPct": 30, "weight": 2 }
+        ]
+      },
+      "rationaleNl": "Op basis van wat je deelt over energie en wat je dag kost, kan het thema Energie managen je helpen om bewuster keuzes te maken in hoe je je energie verdeelt.",
+      "rationaleEn": "Based on what you shared about your energy and what your day costs you, the Managing energy theme can help you make more deliberate choices about how you spend your energy."
+    },
+    {
+      "themeId": "boundaries",
+      "signals": {
+        "energyLeakTags":   [{ "tag": "saying_yes_too_much", "weight": 4 }, { "tag": "no_time_for_myself", "weight": 3 }, { "tag": "stressful_relationships", "weight": 2 }],
+        "energyCostTags":   [{ "tag": "caring_for_others", "weight": 3 }, { "tag": "too_much_to_do", "weight": 2 }],
+        "energyInTags":     [{ "tag": "time_alone", "weight": 1 }],
+        "goalKeywords":     [{ "pattern": "grenzen|boundaries|nee zeggen|say no|ruimte voor mezelf|space for myself", "weight": 4 }],
+        "scoreRules": []
+      },
+      "rationaleNl": "Je geeft aan dat zorgen voor anderen en te veel doen veel kost. Het thema Grenzen kan helpen om beter aan te geven wat wel en niet kan.",
+      "rationaleEn": "You indicated that caring for others and doing too much cost you a lot. The Boundaries theme can help you be clearer about what fits and what doesn't."
+    },
+    {
+      "themeId": "fatigue",
+      "signals": {
+        "energyLeakTags":   [],
+        "energyCostTags":   [{ "tag": "physical_complaints", "weight": 1 }],
+        "energyInTags":     [],
+        "goalKeywords":     [{ "pattern": "vermoeidheid|fatigue|moe|tired|uitputting", "weight": 3 }],
+        "scoreRules": [
+          { "metric": "fatigue", "op": "gapAboveAcceptable", "thresholdPct": 40, "weight": 4 },
+          { "metric": "fatigue", "op": "absolute", "min": 7, "weight": 2 }
+        ]
+      },
+      "rationaleNl": "Je vermoeidheidsscore ligt duidelijk boven wat voor jou acceptabel is. Het thema Vermoeidheid legt uit wat kankergerelateerde vermoeidheid is en wat eraan te doen is.",
+      "rationaleEn": "Your fatigue score is clearly above what feels acceptable for you. The Fatigue theme explains cancer-related fatigue and what can help."
+    },
+    {
+      "themeId": "building_up_reserve",
+      "signals": {
+        "energyLeakTags":   [],
+        "energyCostTags":   [{ "tag": "physical_complaints", "weight": 1 }],
+        "energyInTags":     [{ "tag": "movement", "weight": 3 }, { "tag": "being_outside", "weight": 1 }],
+        "goalKeywords":     [{ "pattern": "kracht|strength|conditie|fitness|opbouwen|build up|stamina|uithoudingsvermogen", "weight": 4 }],
+        "scoreRules": [
+          { "metric": "energy", "op": "gapBelowDesired", "thresholdPct": 40, "weight": 2 }
+        ]
+      },
+      "rationaleNl": "Beweging geeft jou energie en je wilt graag je conditie opbouwen. Het thema Reserves opbouwen biedt rustige stappen om je kracht en uithoudingsvermogen te vergroten.",
+      "rationaleEn": "Movement gives you energy and you want to build up your stamina. The Building up reserve theme offers gentle steps to grow your strength and endurance."
+    },
+    {
+      "themeId": "sleep",
+      "signals": {
+        "energyLeakTags":   [{ "tag": "racing_thoughts", "weight": 2 }],
+        "energyCostTags":   [{ "tag": "poor_sleep", "weight": 5 }],
+        "energyInTags":     [{ "tag": "rest_and_sleep", "weight": 1 }],
+        "goalKeywords":     [{ "pattern": "slaap|sleep|slapen|insomnia|inslapen|doorslapen", "weight": 4 }],
+        "scoreRules": []
+      },
+      "rationaleNl": "Slecht slapen kost veel energie. Het thema Slaap geeft inzicht en concrete handvatten om beter te slapen.",
+      "rationaleEn": "Poor sleep costs a lot of energy. The Sleep theme offers insight and concrete tools to sleep better."
+    },
+    {
+      "themeId": "stress",
+      "signals": {
+        "energyLeakTags":   [{ "tag": "racing_thoughts", "weight": 2 }],
+        "energyCostTags":   [{ "tag": "work_pressure", "weight": 3 }, { "tag": "too_much_to_do", "weight": 2 }],
+        "energyInTags":     [],
+        "goalKeywords":     [{ "pattern": "stress|spanning|druk|pressure|overspannen", "weight": 4 }],
+        "scoreRules": [
+          { "metric": "happiness", "op": "gapBelowAcceptable", "thresholdPct": 20, "weight": 1 }
+        ]
+      },
+      "rationaleNl": "Je dag bevat veel spanning en druk. Het thema Stress helpt je herkennen wat stress doet en hoe je het kunt verminderen.",
+      "rationaleEn": "Your day contains a lot of tension and pressure. The Stress theme helps you recognise what stress does and how to reduce it."
+    },
+    {
+      "themeId": "anxiety",
+      "signals": {
+        "energyLeakTags":   [{ "tag": "anxiety_feelings", "weight": 5 }, { "tag": "racing_thoughts", "weight": 2 }],
+        "energyCostTags":   [{ "tag": "appointments", "weight": 2 }],
+        "energyInTags":     [],
+        "goalKeywords":     [{ "pattern": "angst|anxiety|bang|fear|paniek|panic", "weight": 4 }],
+        "scoreRules": []
+      },
+      "rationaleNl": "Angstige gevoelens nemen veel ruimte in. Het thema Angst legt uit hoe angst werkt en welke oefeningen kunnen helpen.",
+      "rationaleEn": "Anxious feelings take up a lot of space. The Anxiety theme explains how anxiety works and which exercises can help."
+    },
+    {
+      "themeId": "depression",
+      "signals": {
+        "energyLeakTags":   [{ "tag": "low_mood", "weight": 5 }, { "tag": "lost_feeling", "weight": 2 }],
+        "energyCostTags":   [],
+        "energyInTags":     [],
+        "goalKeywords":     [{ "pattern": "depressie|depression|somber|low mood|geen zin", "weight": 4 }],
+        "scoreRules": [
+          { "metric": "happiness", "op": "gapBelowAcceptable", "thresholdPct": 40, "weight": 3 },
+          { "metric": "happiness", "op": "absoluteBelow", "max": 4, "weight": 2 }
+        ]
+      },
+      "rationaleNl": "Je geluksscore en sombere gevoelens vragen aandacht. Het thema Depressie helpt je herkennen wat er speelt en welke stappen kleine verbetering kunnen geven.",
+      "rationaleEn": "Your happiness score and low mood deserve attention. The Depression theme helps you notice what's happening and which small steps can bring improvement."
+    },
+    {
+      "themeId": "worrying",
+      "signals": {
+        "energyLeakTags":   [{ "tag": "worrying", "weight": 5 }, { "tag": "racing_thoughts", "weight": 3 }],
+        "energyCostTags":   [],
+        "energyInTags":     [],
+        "goalKeywords":     [{ "pattern": "piekeren|worry|gedachten|thoughts|hoofd uit", "weight": 4 }],
+        "scoreRules": []
+      },
+      "rationaleNl": "Piekeren kost je veel energie. Het thema Piekeren biedt oefeningen om uit het hoofd en terug in het lichaam te komen.",
+      "rationaleEn": "Worrying costs you a lot of energy. The Worrying theme offers exercises to get out of your head and back into your body."
+    },
+    {
+      "themeId": "adjust_and_process",
+      "signals": {
+        "energyLeakTags":   [{ "tag": "lost_feeling", "weight": 4 }, { "tag": "low_mood", "weight": 1 }],
+        "energyCostTags":   [{ "tag": "appointments", "weight": 1 }],
+        "energyInTags":     [],
+        "goalKeywords":     [{ "pattern": "verwerken|accept|aanpassen|process|nieuwe realiteit|new reality|verloren", "weight": 4 }],
+        "scoreRules": []
+      },
+      "rationaleNl": "Je geeft een gevoel van verlies of verlorenheid aan. Het thema Aanpassen & verwerken helpt je stap voor stap een plek te geven aan wat er gebeurd is.",
+      "rationaleEn": "You describe a sense of loss or feeling lost. The Adjust & process theme helps you, step by step, find a place for what has happened."
+    },
+    {
+      "themeId": "pain",
+      "signals": {
+        "energyLeakTags":   [],
+        "energyCostTags":   [{ "tag": "pain", "weight": 5 }, { "tag": "physical_complaints", "weight": 2 }],
+        "energyInTags":     [],
+        "goalKeywords":     [{ "pattern": "pijn|pain|ache", "weight": 4 }],
+        "scoreRules": []
+      },
+      "rationaleNl": "Pijn neemt een groot deel van je energie. Het thema Pijn helpt je beter om te gaan met aanhoudende pijnklachten.",
+      "rationaleEn": "Pain takes a large share of your energy. The Pain theme helps you better cope with persistent pain."
+    },
+    {
+      "themeId": "work",
+      "signals": {
+        "energyLeakTags":   [],
+        "energyCostTags":   [{ "tag": "work_pressure", "weight": 5 }],
+        "energyInTags":     [{ "tag": "meaningful_work", "weight": 2 }],
+        "goalKeywords":     [{ "pattern": "werk|work|baan|job|collega|colleague|werkdag|after work|na het werk", "weight": 4 }],
+        "scoreRules": []
+      },
+      "rationaleNl": "Werk speelt een grote rol in je energiebalans. Het thema Werk helpt bij re-integratie en het bewaken van wat haalbaar is.",
+      "rationaleEn": "Work plays a big role in your energy balance. The Work theme supports you in return-to-work and in protecting what's feasible."
+    },
+    {
+      "themeId": "selfcare",
+      "signals": {
+        "energyLeakTags":   [{ "tag": "no_time_for_myself", "weight": 3 }],
+        "energyCostTags":   [{ "tag": "caring_for_others", "weight": 2 }],
+        "energyInTags":     [{ "tag": "time_alone", "weight": 2 }, { "tag": "creative_activities", "weight": 2 }],
+        "goalKeywords":     [{ "pattern": "zelfzorg|selfcare|tijd voor mezelf|time for myself|zorgen voor jezelf", "weight": 4 }],
+        "scoreRules": []
+      },
+      "rationaleNl": "Je hebt aangegeven weinig tijd voor jezelf te hebben. Het thema Zelfzorg helpt je kleine momenten van aandacht voor jezelf weer in te bouwen.",
+      "rationaleEn": "You indicated little time for yourself. The Selfcare theme helps you rebuild small moments of attention for yourself."
+    },
+    {
+      "themeId": "nutrition",
+      "signals": {
+        "energyLeakTags":   [],
+        "energyCostTags":   [],
+        "energyInTags":     [{ "tag": "healthy_food", "weight": 4 }],
+        "goalKeywords":     [{ "pattern": "voeding|nutrition|eten|food|dieet|diet", "weight": 4 }],
+        "scoreRules": []
+      },
+      "rationaleNl": "Voeding lijkt voor jou belangrijk te zijn. Het thema Voeding geeft handvatten over wat eten kan betekenen voor je energie.",
+      "rationaleEn": "Nutrition seems important for you. The Nutrition theme offers guidance on what food can mean for your energy."
+    },
+    {
+      "themeId": "resilience",
+      "signals": {
+        "energyLeakTags":   [{ "tag": "low_mood", "weight": 1 }, { "tag": "lost_feeling", "weight": 1 }],
+        "energyCostTags":   [],
+        "energyInTags":     [{ "tag": "social_contact", "weight": 1 }],
+        "goalKeywords":     [{ "pattern": "veerkracht|resilience|sterker|stronger|herstel|recover", "weight": 4 }],
+        "scoreRules": [
+          { "metric": "happiness", "op": "gapBelowDesired", "thresholdPct": 30, "weight": 1 }
+        ]
+      },
+      "rationaleNl": "Het thema Veerkracht ondersteunt je in het opbouwen van mentale flexibiliteit en herstelvermogen.",
+      "rationaleEn": "The Resilience theme supports you in building mental flexibility and recovery."
+    },
+    {
+      "themeId": "dealing_with_problems",
+      "signals": {
+        "energyLeakTags":   [{ "tag": "concentration_issues", "weight": 1 }],
+        "energyCostTags":   [{ "tag": "too_much_to_do", "weight": 1 }],
+        "energyInTags":     [],
+        "goalKeywords":     [{ "pattern": "probleem|problem|aanpak|tackle|stappenplan|step plan|keuzes", "weight": 4 }],
+        "scoreRules": []
+      },
+      "rationaleNl": "Het thema Omgaan met problemen geeft je een stappenplan om vastzittende situaties helderder te maken.",
+      "rationaleEn": "The Dealing with problems theme gives you a step-by-step approach to clarify situations that feel stuck."
+    },
+    {
+      "themeId": "introduction",
+      "signals": {
+        "energyLeakTags":   [],
+        "energyCostTags":   [],
+        "energyInTags":     [],
+        "goalKeywords":     [{ "pattern": "start|begin|introductie|introduction|onboarding", "weight": 2 }],
+        "scoreRules": []
+      },
+      "rationaleNl": "Begin met de Introductie om het programma te leren kennen en te zien wat het je kan brengen.",
+      "rationaleEn": "Start with the Introduction to get to know the programme and see what it can offer you."
+    }
+  ]
+}

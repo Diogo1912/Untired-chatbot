@@ -135,7 +135,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
-      if (!d.user?.isAdmin) router.push('/chat');
+      if (!d.user?.isAdmin) router.push('/hub');
     });
     loadStats();
     loadUsers();
@@ -284,7 +284,7 @@ export default function AdminPage() {
               <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-gray-400 hover:text-gray-600 text-xs">Clear</button>
             )}
           </div>
-          <button onClick={() => router.push('/chat')} className="text-sm text-brand-purple hover:underline font-medium">Back to chat</button>
+          <button onClick={() => router.push('/hub')} className="text-sm text-brand-purple hover:underline font-medium">Switch app</button>
           <button onClick={() => { fetch('/api/auth/logout', { method: 'POST' }); router.push('/'); }} className="text-sm text-gray-400 hover:text-gray-600">Sign out</button>
         </div>
       </header>
