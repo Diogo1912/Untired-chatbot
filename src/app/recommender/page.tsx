@@ -23,7 +23,13 @@ interface RecommenderResult {
   fallbackUsed: boolean;
   engineVersion: string;
   language: 'nl' | 'en';
+  mode?: 'rules' | 'ai';
+  aiMessage?: string;
+  aiModel?: string;
+  aiLatencyMs?: number;
+  aiCostUsd?: number;
 }
+type Mode = 'rules' | 'ai';
 
 const STRINGS = {
   nl: {
@@ -48,6 +54,15 @@ const STRINGS = {
     seedExample: 'Voorbeeld invullen (Erik)',
     reset: 'Leegmaken',
     score: 'Score',
+    modeLabel: 'Modus',
+    modeRules: 'Regels',
+    modeAi: 'AI',
+    modeRulesHint: 'Deterministisch, regels in een vast bestand',
+    modeAiHint: 'Licht model met persoonlijk bericht',
+    aiMessageLabel: 'Persoonlijk bericht',
+    aiDisclaimer: 'Gegenereerd door AI ter vergelijking — geen medisch advies.',
+    aiUnavailable: 'AI-modus is uitgeschakeld door de beheerder.',
+    error: 'Er ging iets mis. Probeer opnieuw.',
   },
   en: {
     title: 'Theme recommender',
@@ -71,6 +86,15 @@ const STRINGS = {
     seedExample: 'Fill example (Erik)',
     reset: 'Clear',
     score: 'Score',
+    modeLabel: 'Mode',
+    modeRules: 'Rules',
+    modeAi: 'AI',
+    modeRulesHint: 'Deterministic, rules in a static file',
+    modeAiHint: 'Light model with a personal message',
+    aiMessageLabel: 'Personal note',
+    aiDisclaimer: 'AI-generated for comparison — not medical advice.',
+    aiUnavailable: 'AI mode is disabled by the admin.',
+    error: 'Something went wrong. Try again.',
   },
 } as const;
 
@@ -106,6 +130,10 @@ export default function RecommenderPage() {
   const [result, setResult] = useState<RecommenderResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [mode, setMode] = useState<Mode>('rules');
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiModel, setAiModel] = useState<string>('');
+  const [errorMsg, setErrorMsg] = useState<string>('');
 
   const t = STRINGS[language];
 
@@ -117,6 +145,8 @@ export default function RecommenderPage() {
       const data = await res.json();
       if (!cancelled) {
         setCatalog(data.tagCatalog);
+        setAiEnabled(!!data.aiEnabled);
+        setAiModel(data.aiModel ?? '');
         setAuthChecked(true);
       }
     })();
@@ -139,14 +169,21 @@ export default function RecommenderPage() {
   async function submit() {
     setLoading(true);
     setResult(null);
+    setErrorMsg('');
     try {
       const res = await fetch('/api/recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, language }),
+        body: JSON.stringify({ ...form, language, mode }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        setErrorMsg(data?.error ?? t.error);
+        return;
+      }
       setResult(data);
+    } catch {
+      setErrorMsg(t.error);
     } finally {
       setLoading(false);
     }
@@ -180,6 +217,43 @@ export default function RecommenderPage() {
             <button onClick={() => setLanguage('en')} className={`px-3 py-1.5 rounded-lg text-sm ${language === 'en' ? 'bg-brand-purple text-white' : 'bg-white border border-gray-200 text-gray-700'}`}>EN</button>
           </div>
         </header>
+
+        {/* Mode switcher — prominent, visible above both columns */}
+        <div className="bg-white rounded-2xl shadow-md shadow-gray-200/60 p-2 mb-5 inline-flex items-center gap-1 border border-gray-100">
+          <span className="text-[10px] uppercase tracking-wider text-gray-400 px-2">{t.modeLabel}</span>
+          <button
+            onClick={() => { setMode('rules'); setResult(null); }}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+              mode === 'rules' ? 'bg-brand-purple text-white shadow-md shadow-brand-purple/20' : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 10h16M4 14h10M4 18h6" />
+            </svg>
+            {t.modeRules}
+          </button>
+          <button
+            onClick={() => { if (aiEnabled) { setMode('ai'); setResult(null); } }}
+            disabled={!aiEnabled}
+            title={aiEnabled ? undefined : t.aiUnavailable}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+              mode === 'ai' ? 'bg-brand-teal text-white shadow-md shadow-brand-teal/20'
+              : aiEnabled ? 'text-gray-600 hover:bg-gray-50'
+              : 'text-gray-300 cursor-not-allowed'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            {t.modeAi}
+            {aiEnabled && aiModel && mode === 'ai' && (
+              <span className="text-[10px] opacity-80 font-mono ml-1">{aiModel.split('/').pop()}</span>
+            )}
+          </button>
+          <span className="text-[10px] text-gray-400 ml-2 pr-2 hidden md:inline">
+            {mode === 'rules' ? t.modeRulesHint : t.modeAiHint}
+          </span>
+        </div>
 
         <div className="grid lg:grid-cols-2 gap-6">
           {/* Form */}
@@ -235,17 +309,39 @@ export default function RecommenderPage() {
               </div>
             ))}
 
-            <button onClick={submit} disabled={loading} className="w-full py-3 rounded-xl bg-brand-purple text-white font-medium shadow-lg shadow-brand-purple/25 disabled:opacity-60">
+            <button onClick={submit} disabled={loading} className={`w-full py-3 rounded-xl text-white font-medium shadow-lg disabled:opacity-60 transition-colors ${mode === 'ai' ? 'bg-brand-teal shadow-brand-teal/25 hover:bg-brand-teal/90' : 'bg-brand-purple shadow-brand-purple/25 hover:bg-brand-purple-light'}`}>
               {loading ? t.loading : t.cta}
             </button>
           </section>
 
           {/* Result */}
           <section className="space-y-4">
-            {!result && (
+            {!result && !errorMsg && (
               <div className="bg-white/50 border border-dashed border-gray-200 rounded-3xl p-8 text-sm text-gray-500 text-center">
                 {language === 'nl' ? 'Vul het formulier in en klik op de knop voor aanbevelingen.' : 'Fill the form and click the button to see recommendations.'}
               </div>
+            )}
+            {errorMsg && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-sm text-red-700">{errorMsg}</div>
+            )}
+            {/* AI prescription message */}
+            {result?.mode === 'ai' && result.aiMessage && (
+              <article className="bg-gradient-to-br from-brand-teal/10 to-white border border-brand-teal/30 rounded-3xl p-6">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-brand-teal text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-brand-teal/30">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[10px] uppercase tracking-wider text-brand-teal font-semibold mb-1">{t.aiMessageLabel}{form.firstName ? ` — ${form.firstName}` : ''}</p>
+                    <p className="text-base text-gray-800 leading-relaxed">{result.aiMessage}</p>
+                    <p className="text-[10px] text-gray-400 mt-3 italic">
+                      {t.aiDisclaimer}{result.aiModel ? ` · ${result.aiModel}` : ''}{result.aiLatencyMs ? ` · ${result.aiLatencyMs}ms` : ''}{result.aiCostUsd ? ` · $${result.aiCostUsd.toFixed(5)}` : ''}
+                    </p>
+                  </div>
+                </div>
+              </article>
             )}
             {result?.fallbackUsed && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 text-sm text-yellow-800">{t.fallback}</div>
@@ -254,7 +350,7 @@ export default function RecommenderPage() {
               <article key={rec.themeId} className="bg-white rounded-3xl shadow-xl shadow-gray-200/80 p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <div className="text-xs uppercase tracking-wide text-brand-purple font-medium">#{idx + 1}</div>
+                    <div className={`text-xs uppercase tracking-wide font-medium ${result?.mode === 'ai' ? 'text-brand-teal' : 'text-brand-purple'}`}>#{idx + 1}</div>
                     <h2 className="text-xl font-semibold text-gray-900 mt-1">
                       {language === 'nl' ? rec.nameNl : rec.nameEn}
                     </h2>

@@ -47,6 +47,15 @@ export const SETTING_DEFS: SettingDef[] = [
     ] },
   { key: 'recommender.show_signals',  label: 'Show matched-signals trace to end users', group: 'recommender', type: 'boolean', default: true,
     description: 'When off, the UI hides the "Signals that contributed" expander.' },
+  { key: 'recommender.ai_enabled',    label: 'Enable AI variant', group: 'recommender', type: 'boolean', default: true,
+    description: 'When on, the recommender shows a mode switcher and users can compare the AI variant against the rule-based one.' },
+  { key: 'recommender.ai_model',      label: 'AI variant model', group: 'recommender', type: 'enum', default: 'anthropic/claude-haiku-4-5',
+    options: [
+      { value: 'anthropic/claude-haiku-4-5',   label: 'Claude Haiku 4.5 (fast & cheap)' },
+      { value: 'anthropic/claude-sonnet-4-5',  label: 'Claude Sonnet 4.5' },
+      { value: 'openai/gpt-4o-mini',           label: 'GPT-4o mini' },
+    ],
+    description: 'Light model used by the AI variant. Must be reachable via OpenRouter.' },
 ];
 
 function defaultsAsRecord(): Record<string, string> {
