@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Logo from '@/components/Logo';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1249,9 +1250,13 @@ export default function ChatPage() {
       fixed md:relative z-30 top-0 left-0 transition-transform duration-300
       ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
     `}>
-      {/* Mobile close button */}
-      <div className="flex items-center justify-end px-3 pt-4 md:hidden">
-        <button className="w-6 h-6 flex items-center justify-center rounded" onClick={() => setSidebarOpen(false)}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100">
+        <button onClick={() => router.push('/hub')} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <Logo size={28} />
+          <span className="text-sm font-semibold text-gray-800">Tired of Cancer</span>
+        </button>
+        <button className="w-6 h-6 flex items-center justify-center rounded md:hidden" onClick={() => setSidebarOpen(false)}>
           <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>

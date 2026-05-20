@@ -196,6 +196,12 @@ function initSchema(db: Database.Database) {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_profile_facts_user_id ON profile_facts(user_id);
     CREATE INDEX IF NOT EXISTS idx_chats_user_id ON chats(user_id);
     CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
@@ -895,3 +901,34 @@ export function getConversationWithEvals(chatId: string) {
     ORDER BY m.created_at ASC
   `).all(chatId) as any[];
 }
+
+// ─── App settings (admin-tunable global config) ─────────────────────────────
+
+export function getAllAppSettings(): Record<string, string> {
+  const rows = getDb().prepare('SELECT key, value FROM app_settings').all() as { key: string; value: string }[];
+  return Object.fromEntries(rows.map(r => [r.key, r.value]));
+}
+
+export function getAppSetting(key: string): string | undefined {
+  const row = getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as { value: string } | undefined;
+  return row?.value;
+}
+
+export function setAppSetting(key: string, value: string) {
+  getDb().prepare(`
+    INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+  `).run(key, value);
+}
+
+export function setAppSettings(entries: Record<string, string>) {
+  const stmt = getDb().prepare(`
+    INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+  `);
+  const tx = getDb().transaction((rows: [string, string][]) => {
+    for (const [k, v] of rows) stmt.run(k, v);
+  });
+  tx(Object.entries(entries));
+}
+

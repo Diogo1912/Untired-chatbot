@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Logo from '@/components/Logo';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -33,7 +34,7 @@ interface UserAnalytics {
 
 interface User { id: string; username: string; is_admin: number; created_at: string; }
 
-type Tab = 'overview' | 'qa' | 'evals' | 'trends' | 'traces' | 'risks' | 'users' | 'rag';
+type Tab = 'overview' | 'qa' | 'evals' | 'traces' | 'users' | 'rag' | 'settings';
 
 const STEP_LABELS: Record<number, string> = { 0: 'Check-in', 1: 'Acknowledge', 2: 'Reflection', 3: 'Connect', 4: 'Close' };
 
@@ -69,7 +70,7 @@ function toneBg(score: number): string {
   return 'bg-red-50 text-red-700';
 }
 
-// ─── Bar Chart Component ────────────────────────────────────────────────────
+// ─── Chart Components ───────────────────────────────────────────────────────
 
 function BarChart({ data, valueKey, labelKey = 'day', color = 'bg-brand-purple', maxHeight = 120, label }: {
   data: any[]; valueKey: string; labelKey?: string; color?: string; maxHeight?: number; label: string;
@@ -98,6 +99,67 @@ function BarChart({ data, valueKey, labelKey = 'day', color = 'bg-brand-purple',
         <span>{data[0]?.[labelKey]?.slice(5)}</span>
         <span>{data[data.length - 1]?.[labelKey]?.slice(5)}</span>
       </div>
+    </div>
+  );
+}
+
+function SparkLine({ data, valueKey, stroke = '#7c3aed', fill = '#7c3aed1a', height = 60, label, format }: {
+  data: any[]; valueKey: string; stroke?: string; fill?: string; height?: number; label: string;
+  format?: (v: number) => string;
+}) {
+  if (!data.length) return <div className="text-center text-xs text-gray-400 py-8">No data</div>;
+  const vals = data.map(d => Number(d[valueKey] ?? 0));
+  const max = Math.max(...vals, 0.001);
+  const min = Math.min(...vals, 0);
+  const range = Math.max(max - min, 0.001);
+  const w = 220;
+  const pts = vals.map((v, i) => {
+    const x = (i / Math.max(vals.length - 1, 1)) * w;
+    const y = height - ((v - min) / range) * (height - 6) - 3;
+    return [x, y] as const;
+  });
+  const linePath = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const areaPath = `${linePath} L${w.toFixed(1)},${height} L0,${height} Z`;
+  const last = vals[vals.length - 1];
+  const first = vals[0];
+  const delta = first === 0 ? 0 : ((last - first) / Math.max(Math.abs(first), 0.0001)) * 100;
+  const arrow = delta > 1 ? '↑' : delta < -1 ? '↓' : '→';
+  const arrowColor = delta > 1 ? 'text-green-600' : delta < -1 ? 'text-red-500' : 'text-gray-400';
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-1">
+        <p className="text-xs font-medium text-gray-600">{label}</p>
+        <span className={`text-[10px] font-semibold ${arrowColor}`}>{arrow} {Math.abs(delta).toFixed(0)}%</span>
+      </div>
+      <div className="flex items-end gap-3">
+        <svg width={w} height={height} viewBox={`0 0 ${w} ${height}`} className="flex-1">
+          <path d={areaPath} fill={fill} />
+          <path d={linePath} stroke={stroke} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          {pts.length > 0 && (
+            <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="3" fill={stroke} />
+          )}
+        </svg>
+        <div className="text-right">
+          <div className="text-lg font-bold text-gray-900">{format ? format(last) : (last < 1 && last > 0 ? last.toFixed(3) : last.toFixed(1))}</div>
+          <div className="text-[10px] text-gray-400">latest</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InsightBadge({ label, value, hint, tone = 'neutral' }: {
+  label: string; value: string; hint?: string; tone?: 'good' | 'bad' | 'neutral';
+}) {
+  const toneCls =
+    tone === 'good' ? 'bg-green-50 border-green-100 text-green-700'
+    : tone === 'bad' ? 'bg-red-50 border-red-100 text-red-700'
+    : 'bg-gray-50 border-gray-100 text-gray-700';
+  return (
+    <div className={`rounded-xl border p-3 ${toneCls}`}>
+      <p className="text-[10px] uppercase tracking-wide opacity-70">{label}</p>
+      <p className="text-lg font-semibold mt-0.5">{value}</p>
+      {hint && <p className="text-[10px] opacity-70 mt-0.5">{hint}</p>}
     </div>
   );
 }
@@ -132,6 +194,38 @@ export default function AdminPage() {
   const [ragContent, setRagContent] = useState('');
   const [ragLoading, setRagLoading] = useState(false);
   const [ragError, setRagError] = useState('');
+
+  // Settings
+  interface SettingDef { key: string; label: string; group: string; type: string; default: any; options?: { value: string; label: string }[]; min?: number; max?: number; step?: number; description?: string; }
+  const [settingDefs, setSettingDefs] = useState<SettingDef[]>([]);
+  const [settingValues, setSettingValues] = useState<Record<string, string>>({});
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+
+  async function loadSettings() {
+    const res = await fetch('/api/admin/settings');
+    if (res.ok) {
+      const d = await res.json();
+      setSettingDefs(d.defs);
+      setSettingValues(d.values);
+    }
+  }
+
+  async function saveSettings() {
+    setSettingsSaving(true);
+    setSettingsSaved(false);
+    const res = await fetch('/api/admin/settings', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settingValues),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setSettingValues(d.values);
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 2000);
+    }
+    setSettingsSaving(false);
+  }
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
@@ -185,9 +279,10 @@ export default function AdminPage() {
 
   useEffect(() => { loadStats(); }, [dateFrom, dateTo, loadStats]);
   useEffect(() => {
-    if (tab === 'trends') loadTrends();
+    if (tab === 'overview') loadTrends();
     if (tab === 'users') loadUserAnalytics();
     if (tab === 'qa') loadSessions();
+    if (tab === 'settings') loadSettings();
   }, [tab]);
 
   async function createUser() {
@@ -241,14 +336,13 @@ export default function AdminPage() {
   }
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'overview', label: 'Overview' },
+    { id: 'overview', label: 'Analytics' },
     { id: 'qa', label: 'QA Review' },
     { id: 'evals', label: 'Evaluations' },
-    { id: 'trends', label: 'Trends' },
     { id: 'traces', label: 'LLM Traces' },
-    { id: 'risks', label: 'Risk Events' },
     { id: 'users', label: 'Users' },
     { id: 'rag', label: 'RAG Content' },
+    { id: 'settings', label: 'Settings' },
   ];
 
   // Quality score computation
@@ -265,11 +359,11 @@ export default function AdminPage() {
       {/* Header */}
       <header className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-brand-purple flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-          </div>
+          <button onClick={() => router.push('/hub')} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+            <Logo size={32} />
+            <span className="font-semibold text-gray-900 hidden sm:inline">Tired of Cancer</span>
+          </button>
+          <span className="text-gray-300">·</span>
           <h1 className="font-semibold text-gray-900">Admin Dashboard</h1>
         </div>
         <div className="flex items-center gap-3">
@@ -432,6 +526,62 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
+
+            {/* Trend section (formerly Trends tab) */}
+            {trends && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+                <div className="flex items-center justify-between px-5 pt-5">
+                  <h3 className="font-semibold text-gray-800 text-sm">Activity over time (30 days)</h3>
+                  <span className="text-[10px] text-gray-400">Tap a chart for hover detail</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 p-5">
+                  <SparkLine data={trends.volumeTrend} valueKey="message_count" label="Messages per day" stroke="#7c3aed" fill="#7c3aed1a" format={v => v.toFixed(0)} />
+                  <SparkLine data={trends.volumeTrend} valueKey="session_count" label="Sessions per day" stroke="#0d9488" fill="#0d94881a" format={v => v.toFixed(0)} />
+                  <SparkLine data={trends.traceTrend} valueKey="request_count" label="LLM requests per day" stroke="#f59e0b" fill="#f59e0b1a" format={v => v.toFixed(0)} />
+                  <SparkLine data={trends.traceTrend} valueKey="daily_cost" label="Daily LLM cost ($)" stroke="#ef4444" fill="#ef44441a" format={v => `$${v.toFixed(2)}`} />
+                  <SparkLine data={trends.traceTrend} valueKey="avg_latency" label="Avg latency (ms)" stroke="#3b82f6" fill="#3b82f61a" format={v => `${v.toFixed(0)}ms`} />
+                  <SparkLine data={trends.evalTrend} valueKey="avg_tone" label="Avg tone (/5)" stroke="#10b981" fill="#10b9811a" format={v => v.toFixed(2)} />
+                  <SparkLine data={trends.evalTrend} valueKey="safety_rate" label="Safety pass rate" stroke="#16a34a" fill="#16a34a1a" format={v => `${(v * 100).toFixed(0)}%`} />
+                  <SparkLine data={trends.evalTrend} valueKey="flow_rate" label="Flow compliance" stroke="#8b5cf6" fill="#8b5cf61a" format={v => `${(v * 100).toFixed(0)}%`} />
+                  <SparkLine data={trends.traceTrend} valueKey="avg_rag_similarity" label="Avg RAG similarity" stroke="#14b8a6" fill="#14b8a61a" format={v => v.toFixed(3)} />
+                </div>
+              </div>
+            )}
+
+            {/* Derived insights */}
+            {trends && (() => {
+              const v = trends.volumeTrend;
+              const cost = trends.traceTrend;
+              const evals = trends.evalTrend;
+              const sumN = (arr: any[], k: string, n: number) => arr.slice(-n).reduce((a, b) => a + (Number(b[k]) || 0), 0);
+              const avgN = (arr: any[], k: string, n: number) => {
+                const slice = arr.slice(-n).filter(d => d[k] != null);
+                if (!slice.length) return 0;
+                return slice.reduce((a, b) => a + Number(b[k]), 0) / slice.length;
+              };
+              const msgWeek = sumN(v, 'message_count', 7);
+              const msgPrev = v.length >= 14 ? v.slice(-14, -7).reduce((a, b) => a + (Number(b.message_count) || 0), 0) : 0;
+              const wow = msgPrev > 0 ? ((msgWeek - msgPrev) / msgPrev) * 100 : 0;
+              const cost7 = sumN(cost, 'daily_cost', 7);
+              const costPerSession = (() => {
+                const s7 = sumN(v, 'session_count', 7);
+                return s7 > 0 ? cost7 / s7 : 0;
+              })();
+              const tone7 = avgN(evals, 'avg_tone', 7);
+              const safety7 = avgN(evals, 'safety_rate', 7);
+              const risksTotal = stats.traceStats?.total_risk_events ?? 0;
+              const flaggedCount = stats.flaggedResponses?.length ?? 0;
+              return (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  <InsightBadge label="Msgs (7d)" value={msgWeek.toString()} hint={`${wow >= 0 ? '+' : ''}${wow.toFixed(0)}% vs prev wk`} tone={wow >= 0 ? 'good' : 'bad'} />
+                  <InsightBadge label="Cost (7d)" value={`$${cost7.toFixed(2)}`} hint={`$${costPerSession.toFixed(3)} / session`} />
+                  <InsightBadge label="Avg tone (7d)" value={`${tone7.toFixed(2)}/5`} tone={tone7 >= 4 ? 'good' : tone7 >= 3 ? 'neutral' : 'bad'} />
+                  <InsightBadge label="Safety (7d)" value={`${(safety7 * 100).toFixed(0)}%`} tone={safety7 >= 0.95 ? 'good' : safety7 >= 0.8 ? 'neutral' : 'bad'} />
+                  <InsightBadge label="Risk events" value={risksTotal.toString()} tone={risksTotal === 0 ? 'good' : 'bad'} hint="lifetime" />
+                  <InsightBadge label="Flagged in QA" value={flaggedCount.toString()} tone={flaggedCount === 0 ? 'good' : 'bad'} />
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -666,40 +816,6 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ═══════════════════ TRENDS ═══════════════════ */}
-        {tab === 'trends' && (
-          <div className="space-y-6">
-            {!trends ? (
-              <div className="flex items-center justify-center py-20">
-                <div className="w-8 h-8 border-2 border-brand-purple/30 border-t-brand-purple rounded-full animate-spin" />
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                    <BarChart data={trends.evalTrend} valueKey="avg_tone" label="Avg Tone Score (daily)" color="bg-brand-purple" />
-                  </div>
-                  <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                    <BarChart data={trends.evalTrend} valueKey="safety_rate" label="Safety Pass Rate (daily)" color="bg-green-500" />
-                  </div>
-                  <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                    <BarChart data={trends.traceTrend} valueKey="avg_latency" label="Avg Latency ms (daily)" color="bg-blue-400" />
-                  </div>
-                  <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                    <BarChart data={trends.traceTrend} valueKey="daily_cost" label="Daily Cost USD" color="bg-amber-400" />
-                  </div>
-                  <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                    <BarChart data={trends.volumeTrend} valueKey="message_count" label="Messages per Day" color="bg-indigo-400" />
-                  </div>
-                  <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                    <BarChart data={trends.traceTrend} valueKey="avg_rag_similarity" label="Avg RAG Similarity (daily)" color="bg-teal-400" />
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
         {/* ═══════════════════ LLM TRACES ═══════════════════ */}
         {tab === 'traces' && stats && (
           <div>
@@ -737,37 +853,6 @@ export default function AdminPage() {
                   </tbody>
                 </table>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* ═══════════════════ RISK EVENTS ═══════════════════ */}
-        {tab === 'risks' && stats && (
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-gray-800 text-sm">Risk Events</h3>
-              <button onClick={() => exportCsv('risks')} className="text-[10px] text-brand-purple hover:underline">Export CSV</button>
-            </div>
-            <div className="space-y-3">
-              {stats.riskEvents.length === 0 && (
-                <div className="text-center py-12 text-gray-400 text-sm">No risk events recorded</div>
-              )}
-              {stats.riskEvents.map((e: any) => (
-                <div key={e.id} className="bg-white rounded-2xl p-4 border border-red-100 shadow-sm">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${e.severity === 'high' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
-                        {e.severity} severity
-                      </span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${e.trigger_type === 'llm_analysis' ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-600'}`}>
-                        {e.trigger_type}
-                      </span>
-                    </div>
-                    <span className="text-xs text-gray-400">{new Date(e.created_at).toLocaleString()}</span>
-                  </div>
-                  <p className="text-sm text-gray-700 bg-gray-50 rounded-xl px-3 py-2">&ldquo;{e.message_content}&rdquo;</p>
-                </div>
-              ))}
             </div>
           </div>
         )}
@@ -897,6 +982,106 @@ export default function AdminPage() {
                 </table>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ═══════════════════ SETTINGS ═══════════════════ */}
+        {tab === 'settings' && (
+          <div className="space-y-6 max-w-3xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-800 text-sm">App settings</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Tune both apps without touching the code. Changes apply immediately.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                {settingsSaved && <span className="text-xs text-green-600 font-medium">Saved ✓</span>}
+                <button
+                  onClick={saveSettings}
+                  disabled={settingsSaving || settingDefs.length === 0}
+                  className="px-4 py-2 rounded-xl bg-brand-purple text-white text-sm font-medium disabled:opacity-60 hover:bg-brand-purple-light transition-colors"
+                >
+                  {settingsSaving ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            </div>
+
+            {settingDefs.length === 0 ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="w-8 h-8 border-2 border-brand-purple/30 border-t-brand-purple rounded-full animate-spin" />
+              </div>
+            ) : (
+              ['general', 'coach', 'recommender'].map(group => {
+                const groupDefs = settingDefs.filter(d => d.group === group);
+                if (!groupDefs.length) return null;
+                const groupLabel = group === 'general' ? 'General' : group === 'coach' ? 'Untire Coach' : 'Theme Recommender';
+                return (
+                  <div key={group} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm space-y-4">
+                    <h4 className="font-semibold text-gray-800 text-sm pb-2 border-b border-gray-100">{groupLabel}</h4>
+                    {groupDefs.map(def => {
+                      const val = settingValues[def.key] ?? String(def.default);
+                      const setVal = (v: string) => setSettingValues(s => ({ ...s, [def.key]: v }));
+                      return (
+                        <div key={def.key} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700">{def.label}</label>
+                            {def.description && <p className="text-[10px] text-gray-400 mt-0.5">{def.description}</p>}
+                            <p className="text-[10px] text-gray-300 mt-0.5 font-mono">{def.key}</p>
+                          </div>
+                          <div className="sm:col-span-2">
+                            {def.type === 'boolean' && (
+                              <label className="inline-flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={val === 'true'}
+                                  onChange={e => setVal(e.target.checked ? 'true' : 'false')}
+                                  className="w-4 h-4 rounded border-gray-300 text-brand-purple focus:ring-brand-purple/30"
+                                />
+                                <span className="text-xs text-gray-600">{val === 'true' ? 'Enabled' : 'Disabled'}</span>
+                              </label>
+                            )}
+                            {def.type === 'enum' && (
+                              <select
+                                value={val}
+                                onChange={e => setVal(e.target.value)}
+                                className="w-full sm:w-64 px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple/30"
+                              >
+                                {def.options?.map(o => (
+                                  <option key={o.value} value={o.value}>{o.label}</option>
+                                ))}
+                              </select>
+                            )}
+                            {def.type === 'number' && (
+                              <input
+                                type="number"
+                                value={val}
+                                min={def.min}
+                                max={def.max}
+                                step={def.step}
+                                onChange={e => setVal(e.target.value)}
+                                className="w-full sm:w-32 px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple/30"
+                              />
+                            )}
+                            {def.type === 'string' && (
+                              <input
+                                type="text"
+                                value={val}
+                                onChange={e => setVal(e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-purple/30"
+                              />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })
+            )}
+
+            <p className="text-[10px] text-gray-400">
+              Coach settings are applied to <strong>new</strong> users; existing users keep their own preferences until they reset.
+              Recommender settings apply on the next request.
+            </p>
           </div>
         )}
       </main>

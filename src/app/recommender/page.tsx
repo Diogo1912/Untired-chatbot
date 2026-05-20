@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Logo from '@/components/Logo';
 
 interface TagDef { id: string; labelNl: string; labelEn: string }
 interface TagCatalog {
@@ -166,7 +167,11 @@ export default function RecommenderPage() {
       <div className="max-w-5xl mx-auto">
         <header className="flex items-center justify-between mb-6">
           <div>
-            <button onClick={() => router.push('/hub')} className="text-sm text-brand-purple hover:underline mb-2">← {language === 'nl' ? 'Andere app' : 'Switch app'}</button>
+            <button onClick={() => router.push('/hub')} className="flex items-center gap-2 mb-3 hover:opacity-80 transition-opacity">
+              <Logo size={32} />
+              <span className="text-sm font-semibold text-gray-800">Tired of Cancer</span>
+              <span className="text-sm text-brand-purple">← {language === 'nl' ? 'Andere app' : 'Switch app'}</span>
+            </button>
             <h1 className="text-2xl font-semibold text-gray-900">{t.title}</h1>
             <p className="text-sm text-gray-500 mt-1">{t.subtitle}</p>
           </div>

@@ -10,6 +10,7 @@
 
 import rulesData from './themeRules.json';
 import { UNTIRE_THEMES, type UntireTheme } from './untireContent';
+import { readSettingsTyped } from './appSettings';
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -212,7 +213,19 @@ export function recommendThemes(input: RecommenderInput): RecommenderResult {
 
   scored.sort((a, b) => b.score - a.score);
 
-  const { minScore, topN, fallbackThemeId } = rules.thresholds;
+  // Admin-tunable overrides (DB) — fall back to JSON thresholds.
+  let minScore = rules.thresholds.minScore;
+  let topN = rules.thresholds.topN;
+  let fallbackThemeId = rules.thresholds.fallbackThemeId;
+  let showSignals = true;
+  try {
+    const cfg = readSettingsTyped();
+    if (typeof cfg['recommender.min_score'] === 'number' && Number.isFinite(cfg['recommender.min_score'])) minScore = cfg['recommender.min_score'] as number;
+    if (typeof cfg['recommender.top_n'] === 'number' && Number.isFinite(cfg['recommender.top_n'])) topN = Math.max(1, Math.floor(cfg['recommender.top_n'] as number));
+    if (typeof cfg['recommender.fallback_theme'] === 'string' && cfg['recommender.fallback_theme']) fallbackThemeId = cfg['recommender.fallback_theme'] as string;
+    if (typeof cfg['recommender.show_signals'] === 'boolean') showSignals = cfg['recommender.show_signals'] as boolean;
+  } catch { /* DB not initialised in some build phases — keep defaults */ }
+
   const above = scored.filter(s => s.score >= minScore).slice(0, topN);
 
   let fallbackUsed = false;
@@ -221,6 +234,10 @@ export function recommendThemes(input: RecommenderInput): RecommenderResult {
     fallbackUsed = true;
     const fb = scored.find(s => s.themeId === fallbackThemeId);
     if (fb) recommendations = [fb];
+  }
+
+  if (!showSignals) {
+    recommendations = recommendations.map(r => ({ ...r, matchedSignals: [] }));
   }
 
   return {
